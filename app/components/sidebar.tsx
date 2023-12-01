@@ -192,15 +192,6 @@ export function SideBar(props: { className?: string }) {
               onClick={() => showToast(Locale.WIP)}
               shadow
           />
-          <IconButton
-              icon={<PrivacyIcon />}
-              text={shouldNarrow ? undefined : Locale.PrivacyPage.Name}
-              className={styles["sidebar-bar-button"]}
-              onClick={() =>
-                  navigate(Path.PrivacyPage, { state: { fromHome: true } })
-              }
-              shadow
-          />
         </div>
         <div className={styles["sidebar-header-bar"]}>
           <IconButton
