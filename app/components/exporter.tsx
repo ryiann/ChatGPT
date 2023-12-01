@@ -566,9 +566,9 @@ export function ImagePreviewer(props: {
           </div>
 
           <div>
-            <div className={styles["main-title"]}>ChatGPT Next Web</div>
+            <div className={styles["main-title"]}>ChatGPT</div>
             <div className={styles["sub-title"]}>
-              Build your own AI assistant.
+              打造专属于你的人工智能助理。
             </div>
             <div className={styles["icons"]}>
               <ExportAvatar avatar={config.avatar} />
@@ -578,22 +578,19 @@ export function ImagePreviewer(props: {
           </div>
           <div>
             <div className={styles["chat-info-item"]}>
-            {"🔗"} {REPO_URL}
+            {Locale.Exporter.Model}: {mask.modelConfig.model}
             </div>
             <div className={styles["chat-info-item"]}>
-            {"🤖"} {Locale.Exporter.Model}: {mask.modelConfig.model}
+            {Locale.Exporter.ServiceProvider}: {accessStore.provider}
             </div>
             <div className={styles["chat-info-item"]}>
-            {"🚀"} {Locale.Exporter.ServiceProvider}: {accessStore.provider}
+            {Locale.Exporter.Messages}: {props.messages.length}
             </div>
             <div className={styles["chat-info-item"]}>
-            {"💭"} {Locale.Exporter.Messages}: {props.messages.length}
+            {Locale.Exporter.Topic}: {session.topic}
             </div>
             <div className={styles["chat-info-item"]}>
-            {"💫"} {Locale.Exporter.Topic}: {session.topic}
-            </div>
-            <div className={styles["chat-info-item"]}>
-            {"🗓️"} {Locale.Exporter.Time}:{" "}
+            {Locale.Exporter.Time}:{" "}
               {new Date(
                 props.messages.at(-1)?.date ?? Date.now(),
               ).toLocaleString()}

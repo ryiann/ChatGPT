@@ -9,8 +9,8 @@ const en: LocaleType = {
   WIP: "Coming Soon...",
   Error: {
     Unauthorized: isApp
-      ? "Unauthorized access, please enter your OpenAI API Key in [auth](/#/auth) page."
-      : "Unauthorized access, please enter access code in [auth](/#/auth) page, or enter your OpenAI API Key.",
+      ? "Unauthorized access, please enter access code in [auth](/#/auth) page."
+      : "Unauthorized access, please enter access code in [auth](/#/auth) page.",
     Content_Policy: {
       Title:
         "Your request got flagged because of a Content Policy Violation.",

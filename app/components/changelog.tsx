@@ -75,9 +75,6 @@ export function ChangeLog() {
 
   return (
     <div className={styles["changelog-page"]}>
-      <div className={`changelog-title ${styles["changelog-title"]}`}>
-        {pageTitle}
-      </div>
       <div className={styles["changelog-content"]}>
         <div className={styles["markdown-body"]}>
           <Markdown content={mdText} />
