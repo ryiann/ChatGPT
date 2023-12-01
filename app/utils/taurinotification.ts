@@ -17,7 +17,7 @@ export async function sendDesktopNotification(body: string) {
           if (permission === 'granted') {
             // Show a notification using Tauri
             window.__TAURI__?.notification.sendNotification({
-              title: "ChatGPT Next Web",
+              title: "ChatGPT",
               body: body,
               icon: `${ChatGptIcon.src}`,
               sound: "Default"

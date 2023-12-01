@@ -1395,22 +1395,20 @@ function _Chat() {
                         ></IconButton>
                       </div>
                       {isUser ? (
-                        <Avatar avatar={config.avatar} />
-                      ) : isContext ? (
-                        <Avatar avatar="1f4ab" /> // Add this line for system messages
+                          <Avatar avatar={config.avatar} />
                       ) : (
-                        <>
-                          {["system"].includes(message.role) ? (
-                            <Avatar avatar="2699-fe0f" />
-                          ) : (
-                            <MaskAvatar
-                              avatar={session.mask.avatar}
-                              model={
-                                message.model || session.mask.modelConfig.model
-                              }
-                            />
-                          )}
-                        </>
+                          <>
+                            {["system"].includes(message.role) ? (
+                                <Avatar avatar="2699-fe0f" />
+                            ) : (
+                                <MaskAvatar
+                                    avatar={session.mask.avatar}
+                                    model={
+                                        message.model || session.mask.modelConfig.model
+                                    }
+                                />
+                            )}
+                          </>
                       )}
                     </div>
 
