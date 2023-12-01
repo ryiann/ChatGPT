@@ -604,7 +604,7 @@ export function ImagePreviewer(props: {
             isUserMessage && config.avatar
               ? config.avatar
               : isSystemMessage
-              ? "1f4ab"
+              ? "2699-fe0f"
               : mask.avatar;
           const messageClass = `${styles["message"]} ${
             styles["message-" + m.role]
