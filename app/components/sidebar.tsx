@@ -192,6 +192,45 @@ export function SideBar(props: { className?: string }) {
               onClick={() => showToast(Locale.WIP)}
               shadow
           />
+          <IconButton
+              icon={<PrivacyIcon />}
+              text={shouldNarrow ? undefined : Locale.PrivacyPage.Name}
+              className={styles["sidebar-bar-button"]}
+              onClick={() =>
+                  navigate(Path.PrivacyPage, { state: { fromHome: true } })
+              }
+              shadow
+          />
+        </div>
+        <div className={styles["sidebar-header-bar"]}>
+          <IconButton
+              icon={<ChangelogIcon />}
+              text={shouldNarrow ? undefined : Locale.Changelog.Name}
+              className={styles["sidebar-bar-button"]}
+              onClick={() => navigate(Path.ChangeLog, { state: { fromHome: true } })}
+              shadow
+          />
+        </div>
+
+        <div className={styles["chat-list-search"]}>
+          <SearchInput
+              value={chatListSearch}
+              onChange={(e) => {
+                setChatListSearch(e.currentTarget.value);
+              }}
+              placeholder={Locale.Home.Search}
+          ></SearchInput>
+        </div>
+
+        <div
+            className={styles["sidebar-body"]}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                navigate(Path.Home);
+              }
+            }}
+        >
+          <ChatList narrow={shouldNarrow} search={chatListSearch} />
         </div>
 
         <div className={styles["sidebar-tail"]}>
