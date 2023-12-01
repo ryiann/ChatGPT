@@ -193,6 +193,9 @@ export function SideBar(props: { className?: string }) {
           shadow
         />
       </div>
+      <div className={styles["sidebar-header-bar"]}>
+
+      </div>
 
       <div className={styles["chat-list-search"]}>
         <SearchInput
