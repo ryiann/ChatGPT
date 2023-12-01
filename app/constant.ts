@@ -8,13 +8,15 @@ export const FETCH_COMMIT_URL = `https://api.github.com/repos/${OWNER}/${REPO}/c
 export const FETCH_TAG_URL = `https://api.github.com/repos/${OWNER}/${REPO}/tags?per_page=1`;
 export const RUNTIME_CONFIG_DOM = "danger-runtime-config";
 
-export const DEFAULT_CORS_HOST = "https://a.nextweb.fun";
-export const DEFAULT_API_HOST = `${DEFAULT_CORS_HOST}/api/proxy`;
+export const DEFAULT_CORS_HOST = "https://chatgpt.btz.sh";
+export const DEFAULT_API_HOST = `${DEFAULT_CORS_HOST}/api/proxy/`;
 export const OPENAI_BASE_URL = "https://api.openai.com";
 
 export enum Path {
   Home = "/",
   Chat = "/chat",
+  PrivacyPage = "/privacy",
+  ChangeLog = "/changelog",
   Settings = "/settings",
   NewChat = "/new-chat",
   Masks = "/masks",
@@ -30,7 +32,7 @@ export enum SlotID {
   AppBody = "app-body",
   CustomModel = "custom-model",
 }
-
+// This will automatically generate JSON files without the need to include the ".json" extension.
 export enum FileName {
   Masks = "masks.json",
   Prompts = "prompts.json",
@@ -69,6 +71,17 @@ export enum ServiceProvider {
 
 export const OpenaiPath = {
   ChatPath: "v1/chat/completions",
+  // text moderation
+  ModerationPath: "v1/moderations",
+  TextModerationModels: {
+    latest: "text-moderation-latest",
+    stable: "text-moderation-stable",
+  },
+  // image creation (dalle models)
+  ImageCreationPath: "v1/images/generations",
+  // todo
+  ImageEditPath: "v1/images/edits",
+  ImageVariationPath: "v1/images/variations",
   UsagePath: "dashboard/billing/usage",
   SubsPath: "dashboard/billing/subscription",
   ListModelPath: "v1/models",
@@ -98,6 +111,22 @@ export const KnowledgeCutOffDate: Record<string, string> = {
 
 export const DEFAULT_MODELS = [
   {
+    name: "dall-e-2",
+    available: true,
+  },
+  {
+    name: "dall-e-3",
+    available: true,
+  },
+  {
+    name: "dall-e-2-beta-instruct-vision",
+    available: true,
+  },
+  {
+    name: "dall-e-3-beta-instruct-vision",
+    available: true,
+  },
+  {
     name: "gpt-4",
     available: true,
   },
@@ -121,6 +150,8 @@ export const DEFAULT_MODELS = [
     name: "gpt-4-32k-0613",
     available: true,
   },
+  // recent update 
+  // read here : https://openai.com/blog/new-models-and-developer-products-announced-at-devday
   {
     name: "gpt-4-1106-preview",
     available: true,

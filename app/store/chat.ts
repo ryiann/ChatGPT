@@ -80,9 +80,10 @@ function createEmptySession(): ChatSession {
   };
 }
 
-function getSummarizeModel(currentModel: string) {
-  // if it is using gpt-* models, force to use 3.5 to summarize
-  return currentModel.startsWith("gpt") ? SUMMARIZE_MODEL : currentModel;
+// fix known issue where summarize is not using the current model selected
+function getSummarizeModel(currentModel: string, modelConfig: ModelConfig) {
+  // should be depends of user selected
+  return currentModel ? modelConfig.model : currentModel;
 }
 
 function countMessages(msgs: ChatMessage[]) {
@@ -305,6 +306,7 @@ export const useChatStore = createPersistStore(
         api.llm.chat({
           messages: sendMessages,
           config: { ...modelConfig, stream: true },
+          whitelist: false,
           onUpdate(message) {
             botMessage.streaming = true;
             if (message) {
@@ -490,19 +492,61 @@ export const useChatStore = createPersistStore(
               content: Locale.Store.Prompt.Topic,
             }),
           );
-          api.llm.chat({
-            messages: topicMessages,
-            config: {
-              model: getSummarizeModel(session.mask.modelConfig.model),
-            },
-            onFinish(message) {
-              get().updateCurrentSession(
-                (session) =>
-                  (session.topic =
-                    message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC),
-              );
-            },
-          });
+      
+          const sessionModelConfig = this.currentSession().mask.modelConfig;
+          const topicModel = getSummarizeModel(session.mask.modelConfig.model, sessionModelConfig);
+      
+          if (topicModel.startsWith("dall-e")) {
+            api.llm.chat({
+              messages: topicMessages,
+              config: {
+                model: "gpt-4-vision-preview",
+                stream: true, // how if we stream this ? hahaha
+              },
+              whitelist: true,
+              onFinish(message) {
+                get().updateCurrentSession(
+                  (session) => {
+                    session.topic =
+                      message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC;
+                    // Add system message after summarizing the topic
+                    const systemMessage: ChatMessage = {
+                      role: "system",
+                      content: `${Locale.FineTuned.Sysmessage} ${session.topic}`,
+                      date: new Date().toLocaleString(),
+                      id: nanoid(),
+                    };
+                    session.messages = [systemMessage, ...session.messages];
+                  });
+              },
+            });
+          } else {
+            // Summarize topic using the selected model
+            api.llm.chat({
+              messages: topicMessages,
+              config: {
+                model: topicModel,
+                stream: true, // how if we stream this ? hahaha
+              },
+              whitelist: true,
+              onFinish(message) {
+                get().updateCurrentSession(
+                  (session) => {
+                  session.topic =
+                    message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC;
+                  // Add system message after summarizing the topic
+                  const systemMessage: ChatMessage = {
+                    role: "system",
+                    content: `${Locale.FineTuned.Sysmessage} ${session.topic}`,
+                    date: new Date().toLocaleString(),
+                    id: nanoid(),
+                  };
+                  session.messages = [systemMessage, ...session.messages];
+                });
+                showToast(Locale.Chat.Commands.UI.SummarizeSuccess);
+              },
+            });
+          }
         }
 
         const modelConfig = session.mask.modelConfig;
@@ -511,8 +555,8 @@ export const useChatStore = createPersistStore(
           session.clearContextIndex ?? 0,
         );
         let toBeSummarizedMsgs = messages
-          .filter((msg) => !msg.isError)
-          .slice(summarizeIndex);
+        .filter((msg) => !msg.isError)
+        .slice(summarizeIndex);
 
         const historyMsgLength = countMessages(toBeSummarizedMsgs);
 
@@ -525,6 +569,7 @@ export const useChatStore = createPersistStore(
 
         // add memory prompt
         toBeSummarizedMsgs.unshift(get().getMemoryPrompt());
+        let isToastShown = false;
 
         const lastSummarizeIndex = session.messages.length;
 
@@ -539,33 +584,86 @@ export const useChatStore = createPersistStore(
           historyMsgLength > modelConfig.compressMessageLengthThreshold &&
           modelConfig.sendMemory
         ) {
-          api.llm.chat({
-            messages: toBeSummarizedMsgs.concat(
-              createMessage({
-                role: "system",
-                content: Locale.Store.Prompt.Summarize,
-                date: "",
-              }),
-            ),
-            config: {
-              ...modelConfig,
-              stream: true,
-              model: getSummarizeModel(session.mask.modelConfig.model),
-            },
-            onUpdate(message) {
-              session.memoryPrompt = message;
-            },
-            onFinish(message) {
-              console.log("[Memory] ", message);
-              get().updateCurrentSession((session) => {
-                session.lastSummarizeIndex = lastSummarizeIndex;
-                session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
-              });
-            },
-            onError(err) {
-              console.error("[Summarize] ", err);
-            },
-          });
+          const sessionModelConfig = this.currentSession().mask.modelConfig;
+          const summarizeModel = getSummarizeModel(session.mask.modelConfig.model, sessionModelConfig);
+          const { max_tokens, ...modelcfg } = modelConfig;
+
+          if (summarizeModel.startsWith("dall-e")) {
+            api.llm.chat({
+              messages: toBeSummarizedMsgs.concat(
+                createMessage({
+                  role: "system",
+                  content: Locale.Store.Prompt.Summarize,
+                  date: "",
+                }),
+              ),
+              config: { ...modelcfg, model: "gpt-4-vision-preview", stream: true },
+              onUpdate(message) {
+                session.memoryPrompt = message;
+                if (!isToastShown) {
+                  showToast(
+                    Locale.Chat.Commands.UI.Summarizing,
+                  );
+                  isToastShown = true;
+                }
+              },
+              whitelist: true,
+              onFinish(message) {
+                console.log("[Memory] ", message);
+                get().updateCurrentSession((session) => {
+                  session.lastSummarizeIndex = lastSummarizeIndex;
+                  session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
+                });
+                showToast(
+                  Locale.Chat.Commands.UI.SummarizeSuccess,
+                );
+              },
+              onError(err) {
+                console.error("[Summarize] ", err);
+                showToast(
+                  Locale.Chat.Commands.UI.SummarizeFail,
+                );
+              },
+            });
+          } else {
+            // Summarize using the selected model
+            api.llm.chat({
+              messages: toBeSummarizedMsgs.concat(
+                createMessage({
+                  role: "system",
+                  content: Locale.Store.Prompt.Summarize,
+                  date: "",
+                }),
+              ),
+              config: { ...modelcfg, stream: true },
+              onUpdate(message) {
+                session.memoryPrompt = message;
+                if (!isToastShown) {
+                  showToast(
+                    Locale.Chat.Commands.UI.Summarizing,
+                  );
+                  isToastShown = true;
+                }
+              },
+              whitelist: true,
+              onFinish(message) {
+                console.log("[Memory] ", message);
+                get().updateCurrentSession((session) => {
+                  session.lastSummarizeIndex = lastSummarizeIndex;
+                  session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
+                });
+                showToast(
+                  Locale.Chat.Commands.UI.SummarizeSuccess,
+                );
+              },
+              onError(err) {
+                console.error("[Summarize] ", err);
+                showToast(
+                  Locale.Chat.Commands.UI.SummarizeFail,
+                );
+              },
+            });
+          }
         }
       },
 
@@ -581,6 +679,13 @@ export const useChatStore = createPersistStore(
         const index = get().currentSessionIndex;
         updater(sessions[index]);
         set(() => ({ sessions }));
+      },
+
+      clearChatData() {
+        set(() => ({
+          sessions: [createEmptySession()],
+          currentSessionIndex: 0,
+        }));
       },
 
       clearAllData() {

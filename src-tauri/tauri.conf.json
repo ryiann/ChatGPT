@@ -43,13 +43,17 @@
         "show": true,
         "startDragging": true,
         "unmaximize": true,
-        "unminimize": true
+        "unminimize": true,
+        "setAlwaysOnTop": true
       },
       "fs": {
         "all": true
       },
       "notification": {
         "all": true
+      },
+      "process": {
+        "relaunch": true
       }
     },
     "bundle": {
@@ -93,7 +97,7 @@
       "endpoints": [
         "https://github.com/Yidadaa/ChatGPT-Next-Web/releases/latest/download/latest.json"
       ],
-      "dialog": false,
+      "dialog": true,
       "windows": {
         "installMode": "passive"
       },
@@ -107,7 +111,8 @@
         "title": "ChatGPT Next Web",
         "width": 960,
         "hiddenTitle": true,
-        "titleBarStyle": "Overlay"
+        "titleBarStyle": "Overlay",
+        "alwaysOnTop": false
       }
     ]
   }

@@ -4,6 +4,8 @@ import { getClientConfig } from "../config/client";
 import { createPersistStore } from "../utils/store";
 import ChatGptIcon from "../icons/chatgpt.png";
 import Locale from "../locales";
+import { showToast } from "../components/ui-lib";
+import { sendDesktopNotification } from "../utils/taurinotification";
 
 const ONE_MINUTE = 60 * 1000;
 const isApp = !!getClientConfig()?.isApp;
@@ -49,6 +51,22 @@ export const useUpdateStore = createPersistStore(
     lastUpdate: 0,
     version: "unknown",
     remoteVersion: "",
+    // this my stuff for later
+    pub_date: "",
+    platforms: {
+      "linux-x86_64": {
+        signature: "",
+        url: ""
+      },
+      "darwin-x86_64": {
+        signature: "",
+        url: ""
+      },
+      "windows-x86_64": {
+        signature: "",
+        url: ""
+      }
+    },
     used: 0,
     subscription: 0,
 
@@ -83,37 +101,24 @@ export const useUpdateStore = createPersistStore(
         set(() => ({
           remoteVersion: remoteId,
         }));
-        if (window.__TAURI__?.notification && isApp) {
-          // Check if notification permission is granted
-          await window.__TAURI__?.notification.isPermissionGranted().then((granted) => {
-            if (!granted) {
-              return;
-            } else {
-              // Request permission to show notifications
-              window.__TAURI__?.notification.requestPermission().then((permission) => {
-                if (permission === 'granted') {
-                  if (version === remoteId) {
-                    // Show a notification using Tauri
-                    window.__TAURI__?.notification.sendNotification({
-                      title: "ChatGPT Next Web",
-                      body: `${Locale.Settings.Update.IsLatest}`,
-                      icon: `${ChatGptIcon.src}`,
-                      sound: "Default"
-                    });
-                  } else {
-                    const updateMessage = Locale.Settings.Update.FoundUpdate(`${remoteId}`);
-                    // Show a notification for the new version using Tauri
-                    window.__TAURI__?.notification.sendNotification({
-                      title: "ChatGPT Next Web",
-                      body: updateMessage,
-                      icon: `${ChatGptIcon.src}`,
-                      sound: "Default"
-                    });
-                  }
-                }
-              });
-            }
-          });
+
+        if (isApp) {
+          if (remoteId !== version) {
+            const foundUpdateMessage = Locale.Settings.Update.FoundUpdate(`${remoteId}`);
+            // Show a notification for the new version using Tauri Notification
+            sendDesktopNotification(foundUpdateMessage);
+            // this a wild for updating desktop app using Tauri Updater
+            window.__TAURI__?.updater.checkUpdate().then((updateResult) => {
+              if (updateResult.status === "DONE") {
+                window.__TAURI__?.updater.installUpdate();
+              }
+            }).catch((e) => {
+              console.error("[Check Update Error]", e);
+              showToast(Locale.Settings.Update.UpdateFailed);
+            });
+          } else {
+            sendDesktopNotification(Locale.Settings.Update.IsLatest);
+          }
         }
         console.log("[Got Upstream] ", remoteId);
       } catch (error) {
@@ -145,6 +150,31 @@ export const useUpdateStore = createPersistStore(
   }),
   {
     name: StoreKey.Update,
-    version: 1,
+    version: 1.1, // added platform for client app updater this my stuff for later
+    migrate: (persistedState, version) => {
+      const state = persistedState as any;
+      if (version === 1) {
+        return {
+          ...state,
+          pub_date: "",
+          platforms: {
+            "linux-x86_64": {
+              signature: "",
+              url: ""
+            },
+            "darwin-x86_64": {
+              signature: "",
+              url: ""
+            },
+            "windows-x86_64": {
+              signature: "",
+              url: ""
+            }
+          },
+          version: 1.1,
+        };
+      }
+      return state;
+    },
   },
 );

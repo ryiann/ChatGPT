@@ -41,7 +41,12 @@ const it: PartialLocaleType = {
     Copy: "Copia tutto",
     Download: "Scarica",
     MessageFromYou: "Messaggio da te",
-    MessageFromChatGPT: "Messaggio da ChatGPT",
+    MessageFromChatGPT: {
+      NoRole: "Messaggio da ChatGPT",
+      RoleAssistant: "Assistente",
+      RoleSystem: "Sistema",
+      SysMemoryPrompt: "Prompt di memoria di sistema",
+    },
   },
   Memory: {
     Title: "Prompt di memoria",
@@ -128,11 +133,14 @@ const it: PartialLocaleType = {
     Usage: {
       Title: "Bilancio Account",
       SubTitle(used: any, total: any) {
-        return `Attualmente usato in questo mese $${used}, soglia massima $${total}`;
+        const hardLimitusd = total.hard_limit_usd !== undefined ? new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'USD' }).format(total.hard_limit_usd) : "sconosciuto";
+        const hardLimit = total.system_hard_limit_usd !== undefined ? new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'USD' }).format(total.system_hard_limit_usd) : "sconosciuto";
+        const usedFormatted = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'USD' }).format(used);
+        return `Utilizzato questo mese: ${usedFormatted}, Limite massimo: ${hardLimitusd}, Limite di utilizzo approvato: ${hardLimit}`;
       },
       IsChecking: "Controllando...",
       Check: "Controlla ancora",
-      NoAccess: "Inserire la chiave API per controllare il saldo",
+      NoAccess: `Inserisci la chiave di sessione nella chiave API che inizia con il prefisso "sess-" per verificare il saldo.`,
     },
 
     Model: "Modello GPT",
@@ -184,6 +192,10 @@ const it: PartialLocaleType = {
   },
   FineTuned: {
     Sysmessage: "Sei un assistente che",
+  },
+  PrivacyPage: {
+    Name: "Privacy",
+    Confirm: "Accetto",
   },
   Mask: {
     Name: "Mask",
