@@ -375,24 +375,29 @@ export const useChatStore = createPersistStore(
         const clearContextIndex = session.clearContextIndex ?? 0;
         const messages = session.messages.slice();
         const totalMessageCount = session.messages.length;
+        const customsystemprompt = session.mask.modelConfig.systemprompt;
 
         // in-context prompts
         const contextPrompts = session.mask.context.slice();
 
         // system prompts, to get close to OpenAI Web ChatGPT
-        const shouldInjectSystemPrompts = modelConfig.enableInjectSystemPrompts;
+        const modelStartsWithDallE = modelConfig.model.startsWith("dall-e");
+        const shouldInjectSystemPrompts = modelConfig.enableInjectSystemPrompts && !modelStartsWithDallE;
         const systemPrompts = shouldInjectSystemPrompts
           ? [
               createMessage({
                 role: "system",
                 content: fillTemplateWith("", {
                   ...modelConfig,
-                  template: DEFAULT_SYSTEM_TEMPLATE,
+                  template: customsystemprompt.default,
                 }),
               }),
             ]
           : [];
-        if (shouldInjectSystemPrompts) {
+
+        if (modelStartsWithDallE) {
+          console.log("[Global System Prompt] Dall-e Models no need this");
+        } else if (shouldInjectSystemPrompts) {
           console.log(
             "[Global System Prompt] ",
             systemPrompts.at(0)?.content ?? "empty",
@@ -698,7 +703,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.1,
+    version: 3.2,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -742,6 +747,16 @@ export const useChatStore = createPersistStore(
             s.mask.modelConfig.enableInjectSystemPrompts =
               config.modelConfig.enableInjectSystemPrompts;
           }
+        });
+      }
+
+      // New migration step for systemprompt
+      if (version < 3.2) { // assuming 3.2 is the version where systemprompt was introduced
+        newState.sessions.forEach((session) => {
+          // Check if the systemprompt property exists, and if not, add it with the default value
+          session.mask.modelConfig.systemprompt = session.mask.modelConfig.systemprompt || {
+            default: DEFAULT_SYSTEM_TEMPLATE,
+          };
         });
       }
 

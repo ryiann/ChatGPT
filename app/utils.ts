@@ -2,9 +2,13 @@ import { getClientConfig } from "./config/client";
 import { useEffect, useState } from "react";
 import { showToast } from "./components/ui-lib";
 import Locale from "./locales";
+import { useAccessStore } from "./store";
 
 export function trimTopic(topic: string) {
-  return topic.replace(/[，。！？”“"、,.!?]*$/, "");
+  // Fix an issue where double quotes still show in the Indonesian language
+  // This will remove the specified punctuation from the end of the string
+  // and also trim quotes from both the start and end if they exist.
+  return topic.replace(/^["“”]+|["“”]+$/g, "").replace(/[，。！？”“"、,.!?]*$/, "");
 }
 
 const isApp = !!getClientConfig()?.isApp;
@@ -83,6 +87,12 @@ export async function downloadAs(text: object, filename: string) {
   } catch (error) {
     showToast(Locale.Download.Failed);
   }
+}
+
+// Assuming you have a function to get the provider from the state
+export function getProviderFromState(): string {
+  const accessStore = useAccessStore.getState();
+  return accessStore.provider;
 }
 
 export function readFromFile() {

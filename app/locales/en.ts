@@ -223,6 +223,10 @@ const en: LocaleType = {
     },
     SendKey: "Send Key",
     PinAppKey: "Pin App Shortcut Key",
+    SystemPromptTemplate: {
+      Title: "System Prompt Template",
+      SubTitle: "A system prompt template for every request. It can use the local language. If the language is not listed, the default language (English) will be used.",
+    },
     Theme: "Theme",
     TightBorder: "Tight Border",
     SendPreviewBubble: {
@@ -612,12 +616,26 @@ const en: LocaleType = {
     Cancel: "Cancel",
     Close: "Close",
     Create: "Create",
+    Continue: "Continue",
     Edit: "Edit",
     Export: "Export",
     Import: "Import",
     Sync: "Sync",
     Config: "Config",
     Manage: "Manage",
+  },
+  // don't linting this `System_Template` keep format like this
+  // this a object not string
+  System_Template: `
+You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutoff: {{cutoff}}
+Current model: {{model}}
+Current time: {{time}}
+Latex inline: $x^2$ 
+Latex block: $$e=mc^2$$`,
+  Label_System_Template: {
+    Default: "Default System Template",
+    Local: "Local System Template",
   },
   Exporter: {
     Description: {

@@ -221,6 +221,10 @@ const cn = {
     },
     SendKey: "发送键",
     PinAppKey: "固定应用快捷键",
+    SystemPromptTemplate: {
+      Title: "系统提示模板",
+      SubTitle: "每个请求的系统提示模板。它可以使用本地语言。如果没有列出该语言，则将使用默认语言（英语）。",
+    },
     Theme: "主题",
     TightBorder: "无边框模式",
     SendPreviewBubble: {
@@ -608,12 +612,26 @@ const cn = {
     Cancel: "取消",
     Close: "关闭",
     Create: "新建",
+    Continue: "继续",
     Edit: "编辑",
     Export: "导出",
     Import: "导入",
     Sync: "同步",
     Config: "配置",
     Manage: "管理",
+  },
+  // don't linting this `System_Template` keep format like this
+  // this a object not string
+  System_Template: `
+您正在与ChatGPT对话，这是一个由OpenAI训练的大型语言模型。
+知识截止点: {{cutoff}}
+当前模型: {{model}}
+当前时间: {{time}}
+Latex 行内公式: $x^2$ 
+Latex 块公式: $$e=mc^2$$`,
+  Label_System_Template: {
+    Default: "默认系统模板",
+    Local: "本地系统模板",
   },
   Exporter: {
     Description: {
