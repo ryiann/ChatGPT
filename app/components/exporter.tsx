@@ -29,10 +29,11 @@ import NextImage from "next/image";
 
 import { toBlob, toPng } from "html-to-image";
 import { DEFAULT_MASK_AVATAR } from "../store/mask";
-import { api } from "../client/api";
+
 import { prettyObject } from "../utils/format";
-import { EXPORT_MESSAGE_CLASS_NAME, REPO_URL } from "../constant";
+import { EXPORT_MESSAGE_CLASS_NAME, ModelProvider, REPO_URL } from "../constant";
 import { getClientConfig } from "../config/client";
+import { ClientApi } from "../client/api";
 
 const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
@@ -330,9 +331,16 @@ export function PreviewActions(props: {
 }) {
   const [loading, setLoading] = useState(false);
   const [shouldExport, setShouldExport] = useState(false);
-
+  const config = useAppConfig();
   const onRenderMsgs = (msgs: ChatMessage[]) => {
     setShouldExport(false);
+
+    var api: ClientApi;
+    if (config.modelConfig.model === "gemini-pro") {
+      api = new ClientApi(ModelProvider.GeminiPro);
+    } else {
+      api = new ClientApi(ModelProvider.GPT);
+    }
 
     api
       .share(msgs)
@@ -478,6 +486,38 @@ export function ImagePreviewer(props: {
 
   const isMobile = useMobileScreen();
 
+  const replaceImageUrls = async (dom: { querySelectorAll: (arg0: string) => any; }) => {
+    // Select both img and a tags in the DOM
+    const elementsWithUrls = dom.querySelectorAll('img, a');
+  
+    for (const element of elementsWithUrls) {
+      if (element.closest('.user-avatar')) continue;
+      if (element.tagName === 'IMG' && element.alt === 'bot') continue;
+      if (element.tagName === 'IMG' && element.alt === 'logo') continue;
+      let imageUrl = element.tagName === 'IMG' ? element.src : element.href;
+
+      const response = await fetch(
+        "/api/transferimg", 
+        {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ imageUrl }),
+      }
+      )
+  
+      // If the API call is successful, replace the URL
+      if (response.ok) {
+        const data = await response.json();
+        if (element.tagName === 'IMG') {
+          element.src = data.newImageUrl; // Update image source
+        } else {
+          element.href = data.newImageUrl; // Update link href
+        }
+      }
+    }
+  };
+  
+
   const download = async () => {
     showToast(Locale.Export.Image.Toast);
     const dom = previewRef.current;
@@ -486,6 +526,7 @@ export function ImagePreviewer(props: {
     const isApp = getClientConfig()?.isApp;
 
     try {
+      await replaceImageUrls(dom);
       const blob = await toPng(dom);
       if (!blob) return;
 

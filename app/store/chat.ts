@@ -8,10 +8,11 @@ import {
   DEFAULT_INPUT_TEMPLATE,
   DEFAULT_SYSTEM_TEMPLATE,
   KnowledgeCutOffDate,
+  ModelProvider,
   StoreKey,
   SUMMARIZE_MODEL,
 } from "../constant";
-import { api, RequestMessage } from "../client/api";
+import { ClientApi, RequestMessage } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { prettyObject } from "../utils/format";
 import { estimateTokenLength } from "../utils/token";
@@ -302,6 +303,15 @@ export const useChatStore = createPersistStore(
           ]);
         });
 
+        // Changed 'var' to 'let' since 'api' is reassigned conditionally
+       // Note: keep type safety by using 'let' instead of 'var', this not a javascript lmao
+        let api: ClientApi;
+        if (modelConfig.model === "gemini-pro") {
+          api = new ClientApi(ModelProvider.GeminiPro);
+        } else {
+          api = new ClientApi(ModelProvider.GPT);
+        }
+
         // make request
         api.llm.chat({
           messages: sendMessages,
@@ -375,32 +385,33 @@ export const useChatStore = createPersistStore(
         const clearContextIndex = session.clearContextIndex ?? 0;
         const messages = session.messages.slice();
         const totalMessageCount = session.messages.length;
-        const customsystemprompt = session.mask.modelConfig.systemprompt;
+        const customSystemPrompt = session.mask.modelConfig.systemprompt; // Renamed to camelCase for consistency
 
         // in-context prompts
         const contextPrompts = session.mask.context.slice();
 
         // system prompts, to get close to OpenAI Web ChatGPT
         const modelStartsWithDallE = modelConfig.model.startsWith("dall-e");
-        const shouldInjectSystemPrompts = modelConfig.enableInjectSystemPrompts && !modelStartsWithDallE;
-        const systemPrompts = shouldInjectSystemPrompts
-          ? [
-              createMessage({
-                role: "system",
-                content: fillTemplateWith("", {
-                  ...modelConfig,
-                  template: customsystemprompt.default,
-                }),
-              }),
-            ]
-          : [];
+        //const modelStartsWithGemini = modelConfig.model.startsWith("gemini-pro");
+        const shouldInjectSystemPrompts = modelConfig.enableInjectSystemPrompts;
+        let systemPrompts: ChatMessage[] = []; // Define the type for better type checking
+        if (shouldInjectSystemPrompts) {
+          systemPrompts.push(createMessage({
+            role: "system",
+            content: fillTemplateWith("", {
+              ...modelConfig,
+              template: customSystemPrompt.default, // Removed the extra line breaks
+            }),
+          }));
+        }
 
+        // Log messages about system prompts based on conditions
         if (modelStartsWithDallE) {
-          console.log("[Global System Prompt] Dall-e Models no need this");
+          console.log("[Global System Prompt] Dall-e no need this");
         } else if (shouldInjectSystemPrompts) {
           console.log(
             "[Global System Prompt] ",
-            systemPrompts.at(0)?.content ?? "empty",
+            systemPrompts[0]?.content ?? "empty",
           );
         }
 
@@ -480,6 +491,16 @@ export const useChatStore = createPersistStore(
       summarizeSession() {
         const config = useAppConfig.getState();
         const session = get().currentSession();
+        const modelConfig = session.mask.modelConfig;
+
+        // Changed 'var' to 'let' since 'api' is reassigned conditionally
+        // Note: keep type safety by using 'let' instead of 'var', this not a javascript lmao
+        let api: ClientApi;
+        if (modelConfig.model === "gemini-pro") {
+          api = new ClientApi(ModelProvider.GeminiPro);
+        } else {
+          api = new ClientApi(ModelProvider.GPT);
+        }
 
         // remove error messages if any
         const messages = session.messages;
@@ -553,8 +574,6 @@ export const useChatStore = createPersistStore(
             });
           }
         }
-
-        const modelConfig = session.mask.modelConfig;
         const summarizeIndex = Math.max(
           session.lastSummarizeIndex,
           session.clearContextIndex ?? 0,

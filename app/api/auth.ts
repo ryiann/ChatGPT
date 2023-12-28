@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSideConfig } from "../config/server";
 import md5 from "spark-md5";
-import { ACCESS_CODE_PREFIX } from "../constant";
+import { ACCESS_CODE_PREFIX, ModelProvider } from "../constant";
 
 function getIP(req: NextRequest) {
   let ip = req.ip ?? req.headers.get("x-real-ip");
@@ -16,11 +16,11 @@ function getIP(req: NextRequest) {
 
 function parseApiKey(bearToken: string) {
   const token = bearToken.trim().replaceAll("Bearer ", "").trim();
-  const isOpenAiKey = !token.startsWith(ACCESS_CODE_PREFIX);
+  const isApiKey = !token.startsWith(ACCESS_CODE_PREFIX);
 
   return {
-    accessCode: isOpenAiKey ? "" : token.slice(ACCESS_CODE_PREFIX.length),
-    apiKey: isOpenAiKey ? token : "",
+    accessCode: isApiKey ? "" : token.slice(ACCESS_CODE_PREFIX.length),
+    apiKey: isApiKey ? token : "",
   };
 }
 
@@ -30,7 +30,7 @@ function doubleHashForDisplay(hashedCode: string): string {
   return md5.hash(hashedCode);
 }
 
-export function auth(req: NextRequest) {
+export function auth(req: NextRequest, modelProvider: ModelProvider) {
   const authToken = req.headers.get("Authorization") ?? "";
 
   // check if it is openai api key or user token
@@ -55,22 +55,29 @@ export function auth(req: NextRequest) {
   if (serverConfig.hideUserApiKey && !!apiKey) {
     return {
       error: true,
-      msg: "you are not allowed to access openai with your own api key",
+      msg: "you are not allowed to access with your own api key",
     };
   }
 
   // if user does not provide an api key, inject system api key
   if (!apiKey) {
-    const serverApiKey = serverConfig.isAzure
-      ? serverConfig.azureApiKey
-      : serverConfig.apiKey;
+    const serverConfig = getServerSideConfig();
 
-    if (serverApiKey) {
+    // const systemApiKey = serverConfig.isAzure
+    //   ? serverConfig.azureApiKey
+    //   : serverConfig.isGoogle
+    //   ? serverConfig.googleApiKey
+    //   : serverConfig.apiKey;
+
+    const systemApiKey =
+      modelProvider === ModelProvider.GeminiPro
+        ? serverConfig.googleApiKey
+        : serverConfig.isAzure
+        ? serverConfig.azureApiKey
+        : serverConfig.apiKey;
+    if (systemApiKey) {
       console.log("[Auth] use system api key");
-      req.headers.set(
-        "Authorization",
-        `${serverConfig.isAzure ? "" : "Bearer "}${serverApiKey}`,
-      );
+      req.headers.set("Authorization", `Bearer ${systemApiKey}`);
     } else {
       console.log("[Auth] admin did not provide an api key");
     }

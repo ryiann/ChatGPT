@@ -59,6 +59,7 @@ import {
 import Link from "next/link";
 import {
   Azure,
+  Google,
   OPENAI_BASE_URL,
   Path,
   RELEASE_URL,
@@ -908,6 +909,7 @@ export function Settings() {
   const accessStore = useAccessStore();
   const shouldHideBalanceQuery = useMemo(() => {
     const isOpenAiUrl = accessStore.openaiUrl.includes(OPENAI_BASE_URL);
+
     return (
       accessStore.hideBalanceQuery ||
       isOpenAiUrl ||
@@ -960,7 +962,8 @@ export function Settings() {
         navigate(Path.Home);
       }
     };
-    if (clientConfig?.isApp) { // Force to set custom endpoint to true if it's app
+    if (clientConfig?.isApp) {
+      // Force to set custom endpoint to true if it's app
       accessStore.update((state) => {
         state.useCustomConfig = true;
       });
@@ -971,6 +974,13 @@ export function Settings() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // force it to set false for textmoderation if the provider is Azure or Google since default is true
+  useEffect(() => {
+    // This will set textmoderation to false if the provider is Azure or Google
+    if (accessStore.provider === ServiceProvider.Azure || accessStore.provider === ServiceProvider.Google) {
+      updateConfig(prevConfig => ({ ...prevConfig, textmoderation: false }));
+    }
+  }, [accessStore.provider, updateConfig]); // fix warning react while building into binaries
 
   const clientConfig = useMemo(() => getClientConfig(), []);
   const showAccessCode = enabledAccessControl && !clientConfig?.isApp;
@@ -1359,7 +1369,7 @@ export function Settings() {
                         />
                       </ListItem>
                     </>
-                  ) : (
+                  ) : accessStore.provider === "Azure" ? (
                     <>
                       <ListItem
                         title={Locale.Settings.Access.Azure.Endpoint.Title}
@@ -1418,7 +1428,66 @@ export function Settings() {
                         ></input>
                       </ListItem>
                     </>
-                  )}
+                  ) : accessStore.provider === "Google" ? (
+                    <>
+                      <ListItem
+                        title={Locale.Settings.Access.Google.Endpoint.Title}
+                        subTitle={
+                          Locale.Settings.Access.Google.Endpoint.SubTitle +
+                          Google.ExampleEndpoint
+                        }
+                      >
+                        <input
+                          type="text"
+                          value={accessStore.googleUrl}
+                          placeholder={Google.ExampleEndpoint}
+                          onChange={(e) =>
+                            accessStore.update(
+                              (access) =>
+                                (access.googleUrl = e.currentTarget.value),
+                            )
+                          }
+                        ></input>
+                      </ListItem>
+                      <ListItem
+                        title={Locale.Settings.Access.Azure.ApiKey.Title}
+                        subTitle={Locale.Settings.Access.Azure.ApiKey.SubTitle}
+                      >
+                        <PasswordInput
+                          value={accessStore.googleApiKey}
+                          type="text"
+                          placeholder={
+                            Locale.Settings.Access.Google.ApiKey.Placeholder
+                          }
+                          onChange={(e) => {
+                            accessStore.update(
+                              (access) =>
+                                (access.googleApiKey = e.currentTarget.value),
+                            );
+                          }}
+                        />
+                      </ListItem>
+                      <ListItem
+                        title={Locale.Settings.Access.Google.ApiVerion.Title}
+                        subTitle={
+                          Locale.Settings.Access.Google.ApiVerion.SubTitle
+                        }
+                      >
+                        <input
+                          type="text"
+                          value={accessStore.googleApiVersion}
+                          placeholder="2023-08-01-preview"
+                          onChange={(e) =>
+                            accessStore.update(
+                              (access) =>
+                                (access.googleApiVersion =
+                                  e.currentTarget.value),
+                            )
+                          }
+                        ></input>
+                      </ListItem>
+                    </>
+                  ) : null}
                 </>
               )}
             </>
@@ -1476,7 +1545,8 @@ export function Settings() {
               config.update((config) => (config.modelConfig = modelConfig));
             }}
           />
-          {accessStore.provider !== ServiceProvider.Azure && (
+          {accessStore.provider !== ServiceProvider.Azure && 
+           accessStore.provider !== ServiceProvider.Google && ( // disable text-moderation for azure and google provider
             <ListItem
               title={Locale.Settings.TextModeration.Title}
               subTitle={Locale.Settings.TextModeration.SubTitle}
