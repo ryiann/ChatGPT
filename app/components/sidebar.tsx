@@ -201,10 +201,15 @@ export function SideBar(props: { className?: string }) {
 
       <div className={styles["sidebar-tail"]}>
         <div className={styles["sidebar-actions"]}>
-          <div className={styles["sidebar-action"]}>
-            <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
-              <IconButton icon={<GithubIcon />} shadow />
-            </a>
+          <div className={styles["sidebar-action"] + " " + styles.mobile}>
+            <IconButton
+                icon={<DeleteIcon />}
+                onClick={async () => {
+                  if (await showConfirm(Locale.Home.DeleteChat)) {
+                    chatStore.deleteSession(chatStore.currentSessionIndex);
+                  }
+                }}
+            />
           </div>
         </div>
         <div>
