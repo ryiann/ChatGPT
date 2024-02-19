@@ -13,7 +13,7 @@ import MaskIcon from "../icons/mask.svg";
 import PluginIcon from "../icons/plugin.svg";
 import PrivacyIcon from "../icons/locked.svg";
 import PinnedIcon from "../icons/pin.svg";
-import TodoIcon from "../icons/edit.svg"
+import TodoIcon from "../icons/edit.svg";
 import DragIcon from "../icons/drag.svg";
 
 import Locale from "../locales";
@@ -160,10 +160,10 @@ export function SideBar(props: { className?: string }) {
     >
       <div className={styles["sidebar-header"]} data-tauri-drag-region>
         <div className={styles["sidebar-title"]} data-tauri-drag-region>
-          ChatGPT Next
+          ChatGPT
         </div>
         <div className={styles["sidebar-sub-title"]}>
-          Build your own AI assistant.
+          打造专属于你的人工智能助理。
         </div>
         <div className={`${styles["sidebar-logo"]} + no-dark`}>
           <div className={`${styles["animated-logo"]} + no-dark`}>
@@ -189,31 +189,6 @@ export function SideBar(props: { className?: string }) {
         <IconButton
           icon={<PluginIcon />}
           text={shouldNarrow ? undefined : Locale.Plugin.Name}
-          className={styles["sidebar-bar-button"]}
-          onClick={() => showToast(Locale.WIP)}
-          shadow
-        />
-        <IconButton
-          icon={<PrivacyIcon />}
-          text={shouldNarrow ? undefined : Locale.PrivacyPage.Name}
-          className={styles["sidebar-bar-button"]}
-          onClick={() =>
-            navigate(Path.PrivacyPage, { state: { fromHome: true } })
-          }
-          shadow
-        />
-      </div>
-      <div className={styles["sidebar-header-bar"]}>
-        <IconButton
-          icon={<PinnedIcon />}
-          text={shouldNarrow ? undefined : Locale.Changelog.Name}
-          className={styles["sidebar-bar-button"]}
-          onClick={() => navigate(Path.ChangeLog, { state: { fromHome: true } })}
-          shadow
-        />
-        <IconButton
-          icon={<TodoIcon />}
-          text={shouldNarrow ? undefined : Locale.TODOList.Name}
           className={styles["sidebar-bar-button"]}
           onClick={() => showToast(Locale.WIP)}
           shadow
@@ -252,16 +227,6 @@ export function SideBar(props: { className?: string }) {
                 }
               }}
             />
-          </div>
-          <div className={styles["sidebar-action"]}>
-            <Link to={Path.Settings}>
-              <IconButton icon={<SettingsIcon />} shadow />
-            </Link>
-          </div>
-          <div className={styles["sidebar-action"]}>
-            <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
-              <IconButton icon={<GithubIcon />} shadow />
-            </a>
           </div>
         </div>
         <div>
