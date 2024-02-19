@@ -333,6 +333,10 @@ const id: PartialLocaleType = {
       Title: "Pratinjau Obrolan",
       SubTitle: "Pratinjau Obrolan dengan markdown",
     },
+    AutoScrollMessage: {
+      Title: "Balasan Auto-Scroll",
+      SubTitle: "Gulir pesan saat membalas",
+    },
     Mask: {
       Splash: {
         Title: "Layar Pembuka Masks",
@@ -457,8 +461,9 @@ const id: PartialLocaleType = {
         "Ini adalah ringkasan singkat dari riwayat percakapan: " + content,
       Topic:
         "Buat judul berisi empat hingga lima kata untuk percakapan kita yang tidak akan disertakan dalam ringkasan percakapan, seperti instruksi, format, kutipan, tanda baca awal, tanda kutip pendahuluan, atau karakter tambahan. Silakan coba dengan kutipan berakhir.",
-      Summarize:
-        "Buat ringkasan percakapan dalam 200 kata yang akan digunakan sebagai promp di masa depan.",
+      Summarize: // Ditingkatkan oleh H0llyW00dzZ Ref: https://github.com/H0llyW00dzZ/GoGenAI-Terminal-Chat
+        "Dalam 200 kata atau kurang, sediakan ringkasan singkat tentang diskusi yang sedang berlangsung.\n" +
+        "Ringkasan ini akan dijadikan sebagai petunjuk kontekstual untuk referensi di interaksi masa depan",
     },
   },
   Copy: {
@@ -524,6 +529,12 @@ const id: PartialLocaleType = {
         UnHide: "Tampilkan Prompt konteks dalam obrolan",
         Hide: "Sembunyikan Prompt konteks dalam obrolan",
       },
+      ShowFullChatHistory: {
+        Title: "Tampilkan Seluruh Riwayat Obrolan",
+        SubTitle: "Tampilkan riwayat obrolan lengkap",
+        UnHide: "Perlihatkan seluruh riwayat obrolan",
+        Hide: "Sembunyikan seluruh riwayat obrolan (Hanya tampilkan 15 pesan terakhir)",
+      },
       Share: {
         Title: "Bagikan Masks Ini",
         SubTitle: "Buat tautan untuk masks ini",
@@ -554,7 +565,7 @@ const id: PartialLocaleType = {
   // don't linting this `System_Template` keep format like this
   // this a object not string
   System_Template: `
-Anda adalah ChatGPT, sebuah model bahasa besar yang dilatih oleh OpenAI.
+Anda adalah ChatGPT, sebuah model bahasa besar yang dilatih oleh {{ServiceProvider}}.
 Batas pengetahuan: {{cutoff}}
 Model saat ini: {{model}}
 Waktu saat ini: {{time}}
@@ -566,8 +577,8 @@ Latex block: $$e=mc^2$$`,
   },
   Exporter: {
     Description: {
-      Title: "Hanya pesan setelah menghapus konteks yang akan ditampilkan"
-    },  
+      Title: "Hanya pesan setelah menghapus konteks yang akan ditampilkan",
+    },
     Model: "Model",
     ServiceProvider: "Penyedia Layanan",
     Messages: "Pesan",

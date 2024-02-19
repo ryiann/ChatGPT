@@ -231,6 +231,10 @@ const cn = {
       Title: "预览气泡",
       SubTitle: "在预览气泡中预览 Markdown 内容",
     },
+    AutoScrollMessage: {
+      Title: "自动滚动回复",
+      SubTitle: "滚动消息以进行回复",
+    },
     AutoGenerateTitle: {
       Title: "自动生成标题",
       SubTitle: "根据对话内容生成合适的标题",
@@ -455,19 +459,20 @@ const cn = {
       },
       Google: {
         ApiKey: {
-          Title: "接口密钥",
-          SubTitle: "使用自定义 Google AI Studio API Key 绕过密码访问限制",
-          Placeholder: "Google AI Studio API Key",
+          Title: "API 密钥",
+          SubTitle:
+            "从 Google AI 获取您的 API 密钥",
+          Placeholder: "输入您的 Google AI Studio API 密钥",
         },
 
         Endpoint: {
-          Title: "接口地址",
-          SubTitle: "样例：",
+          Title: "终端地址",
+          SubTitle: "示例：",
         },
 
-        ApiVerion: {
-          Title: "接口版本 (gemini-pro api version)",
-          SubTitle: "选择指定的部分版本",
+        ApiVersion: {
+          Title: "API 版本（仅适用于 gemini-pro）",
+          SubTitle: "选择一个特定的 API 版本",
         },
       },
       CustomModel: {
@@ -534,8 +539,9 @@ const cn = {
       History: (content: string) => "这是历史聊天总结作为前情提要：" + content,
       Topic:
         "使用四到五个字直接返回这句话的简要主题，不要解释、不要标点、不要语气词、不要多余文本，不要加粗，如果没有主题，请直接返回“闲聊”",
-      Summarize:
-        "简要总结一下对话内容，用作后续的上下文提示 prompt，控制在 200 字以内",
+      Summarize: // 由H0llyW00dzZ改进 参考：https://github.com/H0llyW00dzZ/GoGenAI-Terminal-Chat
+        "用200字或更少的文字，提供一个关于正在进行中讨论的简短摘要。\n" +
+        "这个摘要将作为未来互动中的上下文参照提示",
     },
   },
   Copy: {
@@ -561,6 +567,9 @@ const cn = {
   },
   Changelog: {
     Name: "Change Log",
+  },
+  TODOList: {
+    Name: "待办事项列表",
   },
   PrivacyPage: {
     Name: "隐私",
@@ -602,6 +611,12 @@ const cn = {
         UnHide: "在聊天中显示默认对话框",
         Hide: "在聊天中隐藏默认对话框",        
       },
+      ShowFullChatHistory: {
+        Title: "显示所有聊天记录",
+        SubTitle: "显示完整的聊天记录",
+        UnHide: "显示整个聊天记录",
+        Hide: "隐藏所有聊天记录（仅显示最后15条消息）",
+      },
       Share: {
         Title: "分享此面具",
         SubTitle: "生成此面具的直达链接",
@@ -640,7 +655,7 @@ const cn = {
   // don't linting this `System_Template` keep format like this
   // this a object not string
   System_Template: `
-您正在与ChatGPT对话，这是一个由OpenAI训练的大型语言模型。
+您正在与ChatGPT对话，这是一个由{{ServiceProvider}}训练的大型语言模型。
 知识截止点: {{cutoff}}
 当前模型: {{model}}
 当前时间: {{time}}

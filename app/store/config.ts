@@ -36,6 +36,7 @@ export const DEFAULT_CONFIG = {
   theme: Theme.Auto as Theme,
   tightBorder: !!getClientConfig()?.isApp,
   sendPreviewBubble: true,
+  autoScrollMessage: false,
   enableAutoGenerateTitle: true,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
 
@@ -286,6 +287,11 @@ export const useAppConfig = createPersistStore(
         state.modelConfig.systemprompt = {
           default: DEFAULT_SYSTEM_TEMPLATE,
         }
+      }
+
+      // set false as default, it much better instead of true
+      if (version < 4.6) {
+        state.autoScrollMessage = false;
       }
 
       return state as any;

@@ -233,6 +233,10 @@ const en: LocaleType = {
       Title: "Send Preview Bubble",
       SubTitle: "Preview markdown in bubble",
     },
+    AutoScrollMessage: {
+      Title: "Auto-Scroll Reply",
+      SubTitle: "Scroll the message during reply",
+    },
     AutoGenerateTitle: {
       Title: "Auto Generate Title",
       SubTitle: "Generate a suitable title based on the conversation content",
@@ -466,8 +470,8 @@ const en: LocaleType = {
         ApiKey: {
           Title: "API Key",
           SubTitle:
-            "Bypass password access restrictions using a custom Google AI Studio API Key",
-          Placeholder: "Google AI Studio API Key",
+            "Obtain your API Key from Google AI",
+          Placeholder: "Enter your Google AI Studio API Key",
         },
 
         Endpoint: {
@@ -475,9 +479,9 @@ const en: LocaleType = {
           SubTitle: "Example:",
         },
 
-        ApiVerion: {
-          Title: "API Version (gemini-pro api version)",
-          SubTitle: "Select a specific part version",
+        ApiVersion: {
+          Title: "API Version (specific to gemini-pro)",
+          SubTitle: "Select a specific API version",
         },
       },
     },
@@ -544,8 +548,9 @@ const en: LocaleType = {
         "This is a summary of the chat history as a recap: " + content,
       Topic:
         "Please generate a four to five word title summarizing our conversation without any lead-in, punctuation, quotation marks, periods, symbols, bold text, or additional text. Remove enclosing quotation marks.",
-      Summarize:
-        "Summarize the discussion briefly in 200 words or less to use as a prompt for future context.",
+      Summarize: // Improved By H0llyW00dzZ Ref : https://github.com/H0llyW00dzZ/GoGenAI-Terminal-Chat
+        "In 200 words or less, provide a brief summary of the ongoing discussion.\n" +
+        "This summary will serve as a prompt for contextual reference in future interactions",
     },
   },
   Copy: {
@@ -571,6 +576,9 @@ const en: LocaleType = {
   },
   Changelog: {
     Name: "Change Log",
+  },
+  TODOList: {
+    Name: "Todo List",
   },
   PrivacyPage: {
     Name: "Privacy",
@@ -612,6 +620,12 @@ const en: LocaleType = {
         UnHide: "Show Context prompts in chat",
         Hide: "Hide Context prompts in chat",
       },
+      ShowFullChatHistory: {
+        Title: "Display All Chat History",
+        SubTitle: "Show the complete chat history",
+        UnHide: "Reveal the entire chat history",
+        Hide: "Hide all chat history (Show only the last 15 messages)",
+      },
       Share: {
         Title: "Share This Mask",
         SubTitle: "Generate a link to this mask",
@@ -645,7 +659,7 @@ const en: LocaleType = {
   // don't linting this `System_Template` keep format like this
   // this a object not string
   System_Template: `
-You are ChatGPT, a large language model trained by OpenAI.
+You are ChatGPT, a large language model trained by {{ServiceProvider}}.
 Knowledge cutoff: {{cutoff}}
 Current model: {{model}}
 Current time: {{time}}

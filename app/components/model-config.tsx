@@ -6,6 +6,7 @@ import { ListItem, Select } from "./ui-lib";
 import { useAllModels } from "../utils/hooks";
 import {
   DEFAULT_SYSTEM_TEMPLATE,
+  Google,
   ModelProvider,
 } from "../constant";
 

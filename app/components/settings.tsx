@@ -894,7 +894,6 @@ export function Settings() {
   const remoteId = updateStore.formatVersion(updateStore.remoteVersion);
   const hasNewVersion = currentVersion !== remoteId;
   const updateUrl = getClientConfig()?.isApp ? RELEASE_URL : UPDATE_URL;
-  const isApp = getClientConfig();
 
   function checkUpdate(force = false) {
     setCheckingUpdate(true);
@@ -1074,7 +1073,7 @@ export function Settings() {
               ))}
             </Select>
           </ListItem>
-          {isApp ? (
+          {clientConfig?.isApp ? (
             <ListItem
               title={Locale.Settings.PinAppKey}
             >
@@ -1174,7 +1173,6 @@ export function Settings() {
               }
             ></input>
           </ListItem>
-
           <ListItem
             title={Locale.Settings.SpeedAnimation.Title}
             subTitle={Locale.Settings.SpeedAnimation.SubTitle}
@@ -1193,7 +1191,21 @@ export function Settings() {
               }
             ></InputRange>
           </ListItem>
-
+          <ListItem
+            title={Locale.Settings.AutoScrollMessage.Title}
+            subTitle={Locale.Settings.AutoScrollMessage.SubTitle}
+          >
+            <input
+              type="checkbox"
+              checked={config.autoScrollMessage}
+              onChange={(e) =>
+                updateConfig(
+                  (config) =>
+                    (config.autoScrollMessage = e.currentTarget.checked),
+                )
+              }
+            ></input>
+          </ListItem>
         </List>
 
         <SyncItems />
@@ -1450,8 +1462,8 @@ export function Settings() {
                         ></input>
                       </ListItem>
                       <ListItem
-                        title={Locale.Settings.Access.Azure.ApiKey.Title}
-                        subTitle={Locale.Settings.Access.Azure.ApiKey.SubTitle}
+                        title={Locale.Settings.Access.Google.ApiKey.Title}
+                        subTitle={Locale.Settings.Access.Google.ApiKey.SubTitle}
                       >
                         <PasswordInput
                           value={accessStore.googleApiKey}
@@ -1468,9 +1480,9 @@ export function Settings() {
                         />
                       </ListItem>
                       <ListItem
-                        title={Locale.Settings.Access.Google.ApiVerion.Title}
+                        title={Locale.Settings.Access.Google.ApiVersion.Title}
                         subTitle={
-                          Locale.Settings.Access.Google.ApiVerion.SubTitle
+                          Locale.Settings.Access.Google.ApiVersion.SubTitle
                         }
                       >
                         <input

@@ -39,7 +39,7 @@ import RobotIcon from "../icons/robot.svg";
 import ChatGptIcon from "../icons/chatgpt.png";
 import EyeOnIcon from "../icons/eye.svg";
 import EyeOffIcon from "../icons/eye-off.svg";
-import { escapeRegExp } from "lodash";
+import { debounce, escapeRegExp } from "lodash";
 
 import {
   ChatMessage,
@@ -99,6 +99,7 @@ import { getClientConfig } from "../config/client";
 import { useAllModels } from "../utils/hooks";
 import { appWindow } from '@tauri-apps/api/window';
 import { sendDesktopNotification } from "../utils/taurinotification";
+import { clearUnfinishedInputForSession, debouncedSave } from "../utils/storageHelper";
 
 const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
@@ -445,13 +446,15 @@ function useScrollToBottom() {
   // for auto-scroll
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-
+  const config = useAppConfig();
+  let isAutoScrollEnabled: boolean = config.autoScrollMessage;
   function scrollDomToBottom() {
     const dom = scrollRef.current;
     if (dom) {
-      requestAnimationFrame(() => {
-        setAutoScroll(true);
-        dom.scrollTo(0, dom.scrollHeight);
+      requestAnimationFrame(() => { // this stupid frame might conflict with smooth behavior
+        setAutoScroll(isAutoScrollEnabled);
+        // Improve Use smooth scrolling behavior
+        dom.scrollTo({ top: dom.scrollHeight, behavior: 'smooth' });
       });
     }
   }
@@ -569,8 +572,8 @@ export function ChatActions(props: {
         onClick={props.toggleContextPrompts}
         text={
           props.showContextPrompts
-            ? Locale.Mask.Config.HideContext.UnHide
-            : Locale.Mask.Config.HideContext.Hide
+            ? Locale.Mask.Config.ShowFullChatHistory.UnHide
+            : Locale.Mask.Config.ShowFullChatHistory.Hide
         }
         icon={
           props.showContextPrompts ? (
@@ -694,7 +697,7 @@ export function EditMessageModal(props: { onClose: () => void }) {
   );
 }
 
-function usePinApp() {
+function usePinApp(sessionId: string) { // Accept sessionId as a parameter
   const [pinApp, setPinApp] = useState(false);
   const isApp = getClientConfig()?.isApp;
   const config = useAppConfig();
@@ -741,17 +744,30 @@ function usePinApp() {
       document.removeEventListener("mousedown", handleMouseClick);
     };
   }, [TauriShortcut, togglePinApp]);
-  // Fix known issue where switching chats a `pinApp` state should be set to `false`, indicating that the app should be unpinned because not stored it into localstorage.
+  // Reset pinApp when the session changes
   useEffect(() => {
-    if (session.id !== undefined) {
-      setPinApp(false);
-    }
-  }, [session.id]);
+    setPinApp(false);
+  }, [sessionId]); // Listen for changes to sessionId
 
   return {
     pinApp: isApp ? pinApp : false,
-    togglePinApp: isApp ? togglePinApp : () => {},
+    togglePinApp: isApp ? togglePinApp : () => { },
   };
+}
+
+// Custom hook for debouncing a function
+function useDebouncedEffect(effect: () => void, deps: any[], delay: number) {
+  // Include `effect` in the dependency array for `useCallback`
+  const callback = useCallback(effect, [effect, ...deps]);
+
+  useEffect(() => {
+    const handler = debounce(callback, delay);
+
+    handler();
+
+    // Cleanup function to cancel the debounced call if the component unmounts
+    return () => handler.cancel();
+  }, [callback, delay]); // `callback` already includes `effect` in its dependencies, so no need to add it here again.
 }
 
 function _Chat() {
@@ -772,7 +788,7 @@ function _Chat() {
   const [hitBottom, setHitBottom] = useState(true);
   const isMobileScreen = useMobileScreen();
   const navigate = useNavigate();
-  const { pinApp, togglePinApp } = usePinApp();
+  const { pinApp, togglePinApp } = usePinApp(session.id);
   const isApp = getClientConfig()?.isApp;
 
   // prompt hints
@@ -915,7 +931,6 @@ function _Chat() {
     }
     setIsLoading(true);
     chatStore.onUserInput(userInput).then(() => setIsLoading(false));
-    localStorage.setItem(LAST_INPUT_KEY, userInput);
     setUserInput("");
     setPromptHints([]);
     if (!isMobileScreen) inputRef.current?.focus();
@@ -1137,14 +1152,16 @@ function _Chat() {
     userInput,
   ]);
 
-  const [msgRenderIndex, _setMsgRenderIndex] = useState(
+  // At the top level of the component
+  // this should be fix a stupid react warning that sometimes its fucking incorrect
+  const [msgRenderIndex, _setMsgRenderIndex] = useState<number>(
     Math.max(0, renderMessages.length - CHAT_PAGE_SIZE),
   );
-  function setMsgRenderIndex(newIndex: number) {
+  const setMsgRenderIndex = useCallback((newIndex: number) => {
     newIndex = Math.min(renderMessages.length - CHAT_PAGE_SIZE, newIndex);
     newIndex = Math.max(0, newIndex);
     _setMsgRenderIndex(newIndex);
-  }
+  }, [renderMessages.length, _setMsgRenderIndex]);
 
   const messages = useMemo(() => {
     const endRenderIndex = Math.min(
@@ -1154,27 +1171,67 @@ function _Chat() {
     return renderMessages.slice(msgRenderIndex, endRenderIndex);
   }, [msgRenderIndex, renderMessages]);
 
-  const onChatBodyScroll = (e: HTMLElement) => {
-    const bottomHeight = e.scrollTop + e.clientHeight;
-    const edgeThreshold = e.clientHeight;
+  const onChatBodyScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget; // Use currentTarget instead of target
+    const bottomHeight = target.scrollTop + target.clientHeight;
+    const edgeThreshold = target.clientHeight;
 
-    const isTouchTopEdge = e.scrollTop <= edgeThreshold;
-    const isTouchBottomEdge = bottomHeight >= e.scrollHeight - edgeThreshold;
-    const isHitBottom =
-      bottomHeight >= e.scrollHeight - (isMobileScreen ? 4 : 10);
+    // Determine if the user is at the top or bottom edge of the chat.
+    const isTouchTopEdge = target.scrollTop <= edgeThreshold;
+    const isTouchBottomEdge = bottomHeight >= target.scrollHeight - edgeThreshold;
 
-    const prevPageMsgIndex = msgRenderIndex - CHAT_PAGE_SIZE;
-    const nextPageMsgIndex = msgRenderIndex + CHAT_PAGE_SIZE;
-
-    if (isTouchTopEdge && !isTouchBottomEdge) {
-      setMsgRenderIndex(prevPageMsgIndex);
-    } else if (isTouchBottomEdge) {
-      setMsgRenderIndex(nextPageMsgIndex);
+    // If the user is manually scrolling, disable auto-scroll.
+    if (isTouchTopEdge || isTouchBottomEdge) {
+      setAutoScroll(false);
+    } else {
+      // Only enable auto-scroll if the `config.autoScrollMessage` is true
+      // and the user has not manually scrolled to the top or bottom edge.
+      if (config.autoScrollMessage) {
+        setAutoScroll(true);
+      }
     }
 
+    // Update the message render index only if auto-scroll is enabled.
+    if (config.autoScrollMessage) {
+      const nextPageMsgIndex = msgRenderIndex + CHAT_PAGE_SIZE;
+      const prevPageMsgIndex = msgRenderIndex - CHAT_PAGE_SIZE;
+
+      if (isTouchTopEdge && !isTouchBottomEdge) {
+        setMsgRenderIndex(prevPageMsgIndex);
+      } else if (isTouchBottomEdge) {
+        setMsgRenderIndex(nextPageMsgIndex);
+      }
+    }
+
+    // Determine if the user has scrolled to the bottom of the chat.
+    const isHitBottom = bottomHeight >= target.scrollHeight - (isMobileScreen ? 4 : 10);
     setHitBottom(isHitBottom);
-    setAutoScroll(isHitBottom);
-  };
+  }, [
+    setHitBottom, 
+    setAutoScroll, 
+    isMobileScreen, 
+    msgRenderIndex, 
+    setMsgRenderIndex, // Added setMsgRenderIndex
+    config.autoScrollMessage // Include this dependency as indicated by the stupid complexity react warning
+  ]);
+
+  // Use the custom hook to debounce the onChatBodyScroll function
+  useDebouncedEffect(() => {
+    const scrollContainer = scrollRef.current;
+    const handleScrollEvent = (event: Event) => {
+      onChatBodyScroll(event as unknown as React.UIEvent<HTMLDivElement>);
+    };
+
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScrollEvent);
+    }
+
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', handleScrollEvent);
+      }
+    };
+  }, [onChatBodyScroll], 100);
 
   function scrollToBottom() {
     setMsgRenderIndex(renderMessages.length - CHAT_PAGE_SIZE);
@@ -1195,12 +1252,21 @@ function _Chat() {
   const showMaxIcon = !isMobileScreen && !clientConfig?.isApp;
 
   useCommand({
-    fill: setUserInput,
+    fill: (text) => {
+      // Call setUserInput only if text is a string
+      if (text !== undefined) {
+        setUserInput(text);
+      }
+    },
     submit: (text) => {
-      doSubmit(text);
+      // Call doSubmit only if text is a string
+      if (text !== undefined) {
+        doSubmit(text);
+      }
     },
     code: (text) => {
-      if (accessStore.disableFastLink) return;
+      // Exit if fast link is disabled or text is undefined
+      if (accessStore.disableFastLink || text === undefined) return;
       console.log("[Command] got code from url: ", text);
       showConfirm(Locale.URLCommand.Code + `code = ${text}`).then((res) => {
         if (res) {
@@ -1209,7 +1275,7 @@ function _Chat() {
       });
     },
     settings: (text) => {
-      if (accessStore.disableFastLink) return;
+      if (accessStore.disableFastLink || typeof text !== 'string') return;
 
       try {
         const payload = JSON.parse(text) as {
@@ -1219,22 +1285,22 @@ function _Chat() {
 
         console.log("[Command] got settings from url: ", payload);
 
-        if (payload.key || payload.url) {
-          showConfirm(
-            Locale.URLCommand.Settings +
-              `\n${JSON.stringify(payload, null, 4)}`,
-          ).then((res) => {
-            if (!res) return;
-            if (payload.key) {
-              accessStore.update(
-                (access) => (access.openaiApiKey = payload.key!),
-              );
+        showConfirm(
+          Locale.URLCommand.Settings +
+          `\n${JSON.stringify(payload, null, 4)}`,
+        ).then((res) => {
+          if (!res) return;
+          accessStore.update((access) => {
+            // Only update openaiApiKey if payload.key is a string
+            if (typeof payload.key === 'string') {
+              access.openaiApiKey = payload.key;
             }
-            if (payload.url) {
-              accessStore.update((access) => (access.openaiUrl = payload.url!));
+            // Only update openaiUrl if payload.url is a string
+            if (typeof payload.url === 'string') {
+              access.openaiUrl = payload.url;
             }
           });
-        }
+        });
       } catch {
         console.error("[Command] failed to get settings from url: ", text);
       }
@@ -1244,22 +1310,78 @@ function _Chat() {
   // edit / insert message modal
   const [isEditingMessage, setIsEditingMessage] = useState(false);
 
+  // TODO: The final improvement needed is to fix the "UNFINISHED_INPUT" overwriting issue that occurs when a user clicks 'start new conversation'. 
+  // After this, I will return to working on the backend with Golang.
+
+  // useRef is used to persist the previous session ID across renders without triggering a re-render.
+  const previousSessionIdRef = useRef(session.id);
+
+  useEffect(() => {
+    // Retrieve the previous session ID stored in the ref.
+    const previousSessionId = previousSessionIdRef.current;
+
+    // Check if the previous session ID is no longer present in the chat store.
+    // If it's not, it indicates that the session has been deleted and we should clear the unfinished input.
+    if (!chatStore.sessions.some(s => s.id === previousSessionId)) {
+      clearUnfinishedInputForSession(previousSessionId);
+    }
+
+    // Update the ref with the new session ID for the next render.
+    previousSessionIdRef.current = session.id;
+
+    // This cleanup function will be called when the component unmounts or when the dependencies of the effect change.
+    // It ensures that the unfinished input for the current session is cleared if the component unmounts
+    // or if the session is deleted from the chat store.
+    return () => {
+      clearUnfinishedInputForSession(session.id);
+    };
+    // The effect depends on session.id and chatStore.sessions to determine when to run.
+    // It should run when the session ID changes or when the list of sessions in the chat store updates.
+  }, [session.id, chatStore.sessions]);
+
+  // Define the key for storing unfinished input based on the session ID outside of the useEffect.
+  const key = UNFINISHED_INPUT(session.id);
+
+  // Define a function that calls the debounced function, wrapped in useCallback.
+  const saveUnfinishedInput = useCallback((input: string) => {
+    debouncedSave(input, key);
+  }, [key]);
+
+  // Call the save function whenever userInput changes.
   // remember unfinished input
   useEffect(() => {
-    // try to load from local storage
-    const key = UNFINISHED_INPUT(session.id);
+    saveUnfinishedInput(userInput);
+  }, [userInput, saveUnfinishedInput]);
+
+  // Load unfinished input when the component mounts or session ID changes.
+  useEffect(() => {
     const mayBeUnfinishedInput = localStorage.getItem(key);
     if (mayBeUnfinishedInput && userInput.length === 0) {
       setUserInput(mayBeUnfinishedInput);
-      localStorage.removeItem(key);
+      // Optionally clear the unfinished input from local storage after loading it.
+      // Note: The removal of "localStorage.removeItem(key);" here is intentional. 
+      // The preservation of input is already handled by the debounced function, which simplifies the stupid complexity.
     }
 
-    const dom = inputRef.current;
+    // Capture the current value of the input reference.
+    const currentInputRef = inputRef.current;
+
+    // This cleanup function will run when the component unmounts or the session.id changes.
     return () => {
-      localStorage.setItem(key, dom?.value ?? "");
+      // Save the current input to local storage only if it is not a command.
+      // Use the captured value from the input reference.
+      const currentInputValue = currentInputRef?.value ?? "";
+      // Save the input to local storage only if it's not empty and not a command.
+      if (currentInputValue && !currentInputValue.startsWith(ChatCommandPrefix)) {
+        localStorage.setItem(key, currentInputValue);
+      } else {
+        // If there's no value, ensure we don't create an empty key in local storage.
+        localStorage.removeItem(key);
+      }
     };
+    // The effect should depend on the session ID to ensure it runs when the session changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session.id]);
 
   return (
     <div className={styles.chat} key={session.id}>
@@ -1343,7 +1465,7 @@ function _Chat() {
       <div
         className={styles["chat-body"]}
         ref={scrollRef}
-        onScroll={(e) => onChatBodyScroll(e.currentTarget)}
+        onScroll={onChatBodyScroll} // Pass the event directly
         onMouseDown={() => inputRef.current?.blur()}
         onTouchStart={() => {
           inputRef.current?.blur();
@@ -1479,8 +1601,8 @@ function _Chat() {
 
                   <div className={styles["chat-message-action-date"]}>
                     {isContext
-                      ? Locale.Chat.IsContext
-                      : message.date.toLocaleString()}
+                      ? `${Locale.Chat.IsContext}${!isMobileScreen ? ` - ${Locale.Exporter.Model}: ${message.model || session.mask.modelConfig.model}` : ''}`
+                      : `${Locale.Exporter.Time}: ${message.date.toLocaleString()}${!isMobileScreen ? ` - ${Locale.Exporter.Model}: ${message.model || session.mask.modelConfig.model}` : ''}`}
                   </div>
                 </div>
               </div>

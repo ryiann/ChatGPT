@@ -1,3 +1,4 @@
+"use client";
 import {
   ApiPath,
   DEFAULT_API_HOST,
@@ -14,7 +15,7 @@ import {
   EventStreamContentType,
   fetchEventSource,
 } from "@fortaine/fetch-event-source";
-import { sendModerationRequest } from './textmoderation';
+import { moderateText } from './textmoderation';
 import { 
   getNewStuff,
   getModelForInstructVersion,
@@ -51,7 +52,9 @@ export class ChatGPTApi implements LLMApi {
 
     if (baseUrl.length === 0) {
       const isApp = !!getClientConfig()?.isApp;
-      baseUrl = isApp ? DEFAULT_API_HOST : ApiPath.OpenAI;
+      baseUrl = isApp
+        ? DEFAULT_API_HOST + "/proxy" + ApiPath.OpenAI
+        : ApiPath.OpenAI;
     }
 
     if (baseUrl.endsWith("/")) {
@@ -64,6 +67,8 @@ export class ChatGPTApi implements LLMApi {
     if (isAzure) {
       path = makeAzurePath(path, accessStore.azureApiVersion);
     }
+
+    console.log("[Proxy Endpoint] ", baseUrl, path);
 
     return [baseUrl, path].join("/");
   }
@@ -90,64 +95,20 @@ export class ChatGPTApi implements LLMApi {
      * @author H0llyW00dzZ
      */
     const textmoderation = useAppConfig.getState().textmoderation;
-    const latest = OpenaiPath.TextModerationModels.latest;
     const checkprovider = getProviderFromState();
-    if (textmoderation !== false // forgot to fix this, was focusing in backend lmao
-      && DEFAULT_MODELS
+    const userMessageS = options.messages.filter((msg) => msg.role === "user");
+    const lastUserMessage = userMessageS[userMessageS.length - 1]?.content;
+    const moderationPath = this.path(OpenaiPath.ModerationPath);
+    // Check if text moderation is enabled and required
+    if (textmoderation !== false
       && options.whitelist !== true
       // Skip text moderation for Azure provider since azure already have text-moderation, and its enabled by default on their service
       && checkprovider !== ServiceProvider.Azure) {
-      const messages = options.messages.map((v) => ({
-        role: v.role,
-        content: v.content,
-      }));
-
-      const userMessages = messages.filter((msg) => msg.role === "user");
-      const userMessage = userMessages[userMessages.length - 1]?.content;
-
-      if (userMessage) {
-        const moderationPath = this.path(OpenaiPath.ModerationPath);
-        const moderationPayload = {
-          input: userMessage,
-          model: latest,
-        };
-
-        try {
-          const moderationResponse = await sendModerationRequest(
-            moderationPath,
-            moderationPayload
-          );
-
-          if (moderationResponse.flagged) {
-            const flaggedCategories = Object.entries(
-              moderationResponse.categories
-            )
-              .filter(([category, flagged]) => flagged)
-              .map(([category]) => category);
-
-            if (flaggedCategories.length > 0) {
-              const translatedReasons = flaggedCategories.map((category) => {
-                const translation =
-                  (Locale.Error.Content_Policy.Reason as any)[category];
-                return translation ? translation : category; // Use category name if translation is not available
-              });
-              const translatedReasonText = translatedReasons.join(", ");
-              const responseText = `${Locale.Error.Content_Policy.Title}\n${Locale.Error.Content_Policy.Reason.Title}: ${translatedReasonText}\n${Locale.Error.Content_Policy.SubTitle}\n`;
-
-              const responseWithGraph = responseText;
-              options.onFinish(responseWithGraph);
-              return;
-            }
-          }
-        } catch (e) {
-          console.log("[Request] failed to make a moderation request", e);
-          const error = {
-            error: (e as Error).message,
-            stack: (e as Error).stack,
-          };
-          options.onFinish(JSON.stringify(error));
-          return;
-        }
+      // Call the moderateText method and handle the result
+      const moderationResult = await moderateText(moderationPath, lastUserMessage, OpenaiPath.TextModerationModels.latest);
+      if (moderationResult) {
+        options.onFinish(moderationResult); // Finish early if moderationResult is not null
+        return;
       }
     }
 
@@ -332,9 +293,6 @@ export class ChatGPTApi implements LLMApi {
 
         controller.signal.onabort = finish;
 
-        const isApp = !!getClientConfig()?.isApp;
-        const apiPath = "api/openai/";
-
         fetchEventSource(chatPath, {
           ...chatPayload,
           async onopen(res) {
@@ -344,105 +302,29 @@ export class ChatGPTApi implements LLMApi {
 
             if (contentType?.startsWith("text/plain")) {
               responseText = await res.clone().text();
-            } else if (contentType?.startsWith("application/json") 
-              && magicPayload.isDalle) { // only dall-e
+            } else if (contentType?.startsWith("application/json")) {
               const jsonResponse = await res.clone().json();
-              const imageUrl = jsonResponse.data?.[0]?.url;
-              const prompt = requestPayloads.image.prompt;
-              const revised_prompt = jsonResponse.data?.[0]?.revised_prompt;
-              const index = requestPayloads.image.n - 1;
-              const size = requestPayloads.image.size;
-              const InstrucModel = defaultModel.endsWith("-vision");
+              // Generic JSON response handling
+              if (jsonResponse.data) {
+                if (magicPayload.isDalle) {
+                  // Specific handling for DALL·E responses
+                  const imageUrl = jsonResponse.data?.[0]?.url;
+                  const prompt = requestPayloads.image.prompt;
+                  const revised_prompt = jsonResponse.data?.[0]?.revised_prompt;
+                  const index = requestPayloads.image.n - 1;
+                  const size = requestPayloads.image.size;
 
-              if (defaultModel.includes("dall-e-3")) {
-                const imageDescription = `| ![${revised_prompt}](${imageUrl}) |\n|---|\n| Size: ${size} |\n| [Download Here](${imageUrl}) |\n| 🎩 🪄 Revised Prompt (${index + 1}): ${revised_prompt} |\n| 🤖 AI Models: ${defaultModel} |`;
 
-                responseText = `${imageDescription}`;
-              } else {
-                const imageDescription = `#### ${prompt} (${index + 1})\n\n\n | ![${imageUrl}](${imageUrl}) |\n|---|\n| Size: ${size} |\n| [Download Here](${imageUrl}) |\n| 🤖 AI Models: ${defaultModel} |`;
-
-                responseText = `${imageDescription}`;
-              }
-
-              if (InstrucModel) {
-                const instructx = await fetch(
-                  (isApp ? DEFAULT_API_HOST : apiPath) + OpenaiPath.ChatPath, // Pass the path parameter
-                  {
-                    method: "POST",
-                    body: JSON.stringify({
-                      messages: [
-                        ...messages,
-                      ],
-                      model: "gpt-4-vision-preview",
-                      temperature: modelConfig.temperature,
-                      presence_penalty: modelConfig.presence_penalty,
-                      frequency_penalty: modelConfig.frequency_penalty,
-                      top_p: modelConfig.top_p,
-                      // have to add this max_tokens for dall-e instruct
-                      max_tokens: modelConfig.max_tokens,
-                    }),
-                    headers: getHeaders(),
+                  let imageDescription = `#### ${prompt} (${index + 1})\n\n\n | ![${imageUrl}](${imageUrl}) |\n|---|\n| Size: ${size} |\n| [Download Here](${imageUrl}) |\n| 🤖 AI Models: ${defaultModel} |`;
+                  if (defaultModel.includes("dall-e-3")) {
+                    imageDescription = `| ![${revised_prompt}](${imageUrl}) |\n|---|\n| Size: ${size} |\n| [Download Here](${imageUrl}) |\n| 🎩 🪄 Revised Prompt (${index + 1}): ${revised_prompt} |\n| 🤖 AI Models: ${defaultModel} |`;
                   }
-                );
-                clearTimeout(requestTimeoutId);
-                const instructxx = await instructx.json();
-
-                const instructionDelta = instructxx.choices?.[0]?.message?.content;
-                const instructionPayload = {
-                  messages: [
-                    ...messages,
-                    {
-                      role: "system",
-                      content: instructionDelta,
-                    },
-                  ],
-                  model: "gpt-4-vision-preview",
-                  temperature: modelConfig.temperature,
-                  presence_penalty: modelConfig.presence_penalty,
-                  frequency_penalty: modelConfig.frequency_penalty,
-                  top_p: modelConfig.top_p,
-                  max_tokens: modelConfig.max_tokens,
-                };
-
-                const instructionResponse = await fetch(
-                  (isApp ? DEFAULT_API_HOST : apiPath) + OpenaiPath.ChatPath,
-                  {
-                    method: "POST",
-                    body: JSON.stringify(instructionPayload),
-                    headers: getHeaders(),
-                  }
-                );
-
-                const instructionJson = await instructionResponse.json();
-                const instructionMessage = instructionJson.choices?.[0]?.message?.content; // Access the appropriate property containing the message
-                const imageDescription = `| ![${prompt}](${imageUrl}) |\n|---|\n| Size: ${size} |\n| [Download Here](${imageUrl}) |\n| 🤖 AI Models: ${defaultModel} |`;
-
-                responseText = `${imageDescription}\n\n${instructionMessage}`;
-              }
-
-              if (
-                !res.ok ||
-                !res.headers
-                  .get("content-type")
-                  ?.startsWith(EventStreamContentType) ||
-                res.status !== 200
-              ) {
-                let anyinfo = await res.clone().text();
-                try {
-                  const infJson = await res.clone().json();
-                  anyinfo = prettyObject(infJson);
-                } catch { }
-                if (res.status === 401) {
-                  responseText = "\n\n" + Locale.Error.Unauthorized;
+                  responseText = `${imageDescription}`;
                 }
-                if (res.status !== 200) {
-                  if (anyinfo) {
-                    responseText += "\n\n" + anyinfo;
-                  }
-                }
-                return;
+                return; // this should be fix json response, unlike go so easy
               }
             }
+            // Handle non-OK responses or unexpected content types
             if (
               !res.ok ||
               !res.headers
@@ -450,13 +332,13 @@ export class ChatGPTApi implements LLMApi {
                 ?.startsWith(EventStreamContentType) ||
               res.status !== 200
             ) {
-              const responseTexts = [responseText];
               let extraInfo = await res.clone().text();
               try {
                 const resJson = await res.clone().json();
                 extraInfo = prettyObject(resJson);
-              } catch {}
+              } catch { }
 
+              const responseTexts = [responseText];
               if (res.status === 401) {
                 responseTexts.push(Locale.Error.Unauthorized);
               }
@@ -485,9 +367,9 @@ export class ChatGPTApi implements LLMApi {
                 remainText += delta;
               }
 
-              if (textmoderation 
-                  && textmoderation.length > 0 
-                  && provider === ServiceProvider.Azure) {
+              if (textmoderation
+                && textmoderation.length > 0
+                && provider === ServiceProvider.Azure) {
                 const contentFilterResults = textmoderation?.[0]?.content_filter_results;
                 console.log(`[${provider}] [Text Moderation] flagged categories result:`, contentFilterResults);
               }
