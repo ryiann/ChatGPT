@@ -10,7 +10,12 @@ import { useAccessStore, useAppConfig, useChatStore } from "@/app/store";
 import { getClientConfig } from "@/app/config/client";
 import Locale from "../../locales";
 import { getServerSideConfig } from "@/app/config/server";
-import { getProviderFromState } from "@/app/utils";
+import {
+  getProviderFromState,
+  getMessageTextContent,
+  getMessageImages,
+  isVisionModel,
+} from "@/app/utils";
 import { getNewStuff } from './NewStuffLLMs';
 
 
@@ -35,7 +40,8 @@ interface GoogleResponse {
  * Represents a part of a message, typically containing text.
  */
 interface MessagePart {
-  text: string;
+  text?: string;
+  inline_data?: InlineData;
 }
 
 /**
@@ -44,6 +50,12 @@ interface MessagePart {
 interface Message {
   role: string;
   parts: MessagePart[];
+}
+
+// easy maintain, unlike stupid "any any any"
+interface InlineData {
+  mime_type: string;
+  data: string;
 }
 
 /**
@@ -104,10 +116,35 @@ export class GeminiProApi implements LLMApi {
     const provider = getProviderFromState();
     const cfgspeed_animation = useAppConfig.getState().speed_animation; // Get the animation speed from the app config
     // const apiClient = this;
-    const messages: Message[] = options.messages.map((v) => ({
-      role: v.role.replace("assistant", "model").replace("system", "user"),
-      parts: [{ text: v.content }],
-    }));
+    const visionModel = isVisionModel(options.config.model);
+    let multimodal = false;
+
+    // Construct messages with the correct types
+    const messages: Message[] = options.messages.map((v) => {
+      let parts: MessagePart[] = [{ text: getMessageTextContent(v) }];
+      if (visionModel) {
+        const images = getMessageImages(v);
+        if (images.length > 0) {
+          multimodal = true;
+          parts = parts.concat(
+            images.map((image) => {
+              const imageType = image.split(";")[0].split(":")[1];
+              const imageData = image.split(",")[1];
+              return {
+                inline_data: {
+                  mime_type: imageType,
+                  data: imageData,
+                },
+              };
+            }),
+          );
+        }
+      }
+      return {
+        role: v.role.replace("assistant", "model").replace("system", "user"),
+        parts: parts,
+      };
+    });
 
     // google requires that role in neighboring messages must not be the same
     for (let i = 0; i < messages.length - 1;) {
@@ -118,8 +155,6 @@ export class GeminiProApi implements LLMApi {
         i++;
       }
     }
-
-    const appConfig = useAppConfig.getState().modelConfig;
     const chatConfig = useChatStore.getState().currentSession().mask.modelConfig;
 
     // Call getNewStuff to determine the max_tokens and other configurations
@@ -130,11 +165,15 @@ export class GeminiProApi implements LLMApi {
       chatConfig.useMaxTokens,
     );
 
-    const modelConfig: ModelConfig = {
-      ...appConfig,
-      ...chatConfig,
-      // Use max_tokens from getNewStuff if defined, otherwise use the existing value
-      max_tokens: max_tokens !== undefined ? max_tokens : options.config.max_tokens,
+    // if (visionModel && messages.length > 1) {
+    //   options.onError?.(new Error("Multiturn chat is not enabled for models/gemini-pro-vision"));
+    // }
+    const modelConfig = {
+      ...useAppConfig.getState().modelConfig,
+      ...useChatStore.getState().currentSession().mask.modelConfig,
+      ...{
+        model: options.config.model,
+      },
     };
 
     const requestPayload = {
@@ -148,6 +187,7 @@ export class GeminiProApi implements LLMApi {
         topP: modelConfig.top_p,
         // "topK": modelConfig.top_k,
       },
+      // TODO: Improve safety settings to make them configurable, similar to the rich terminal interface chat feature in GoGenAI, which is written in Go.
       safetySettings: [
         {
           category: "HARM_CATEGORY_HARASSMENT",
@@ -177,15 +217,16 @@ export class GeminiProApi implements LLMApi {
     const controller = new AbortController();
     options.onController?.(controller);
     try {
-      // Note: With this refactoring, it's now possible to use `v1`, `v1beta` in the settings.
-      // However, this is just temporary and might need to be changed in the future.
-      let chatPath = this.path(accessStore.googleApiVersion + Google.ChatPath);
+      let googleChatPath = visionModel
+        ? Google.VisionChatPath
+        : Google.ChatPath;
+      let chatPath = this.path(googleChatPath);
 
       // let baseUrl = accessStore.googleUrl;
 
       if (!baseUrl) {
         baseUrl = isApp
-          ? DEFAULT_API_HOST + "/api/proxy/google/" + accessStore.googleApiVersion + Google.ChatPath
+          ? DEFAULT_API_HOST + "/api/proxy/google/" + googleChatPath
           : chatPath;
       }
 
@@ -252,6 +293,19 @@ export class GeminiProApi implements LLMApi {
               value,
             }): Promise<any> {
               if (done) {
+                if (response.status !== 200) {
+                  try {
+                    let data = JSON.parse(ensureProperEnding(partialData));
+                    if (data && data[0].error) {
+                      options.onError?.(new Error(data[0].error.message));
+                    } else {
+                      options.onError?.(new Error("Request failed"));
+                    }
+                  } catch (_) {
+                    options.onError?.(new Error("Request failed"));
+                  }
+                }
+
                 console.log("[Streaming] Stream complete");
                 // options.onFinish(responseText + remainText);
                 finished = true;
