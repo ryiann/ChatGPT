@@ -48,8 +48,15 @@ export async function sendModerationRequest(
         });
 
         if (!moderationResponse.ok) {
-            // Handle non-2xx responses
-            throw new Error(`[${moderationResponse.status}] Failed to get moderation response`);
+            // This a better way, interface error hahaaha
+            const errorBody = await moderationResponse.json(); // Attempt to read the response body
+            // Use JSON.stringify to convert the error object to a string
+            throw new Error(`[${moderationResponse.status}] Failed to get moderation response: ${JSON.stringify(errorBody)}`);
+        }
+
+        const contentType = moderationResponse.headers.get("Content-Type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("Unexpected content type received from moderation response");
         }
 
         const moderationJson = await moderationResponse.json();

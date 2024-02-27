@@ -41,7 +41,8 @@ import RobotIcon from "../icons/robot.svg";
 import ChatGptIcon from "../icons/chatgpt.png";
 import EyeOnIcon from "../icons/eye.svg";
 import EyeOffIcon from "../icons/eye-off.svg";
-import { debounce, escapeRegExp } from "lodash";
+import { escapeRegExp } from "lodash";
+import CloseIcon from "../icons/close.svg";
 
 import {
   ChatMessage,
@@ -103,10 +104,12 @@ import { prettyObject } from "../utils/format";
 import { ExportMessageModal } from "./exporter";
 import { getClientConfig } from "../config/client";
 import { useAllModels } from "../utils/hooks";
-import { appWindow } from '@tauri-apps/api/window';
-import { sendDesktopNotification } from "../utils/taurinotification";
 import { clearUnfinishedInputForSession, debouncedSave } from "../utils/storageHelper";
+import { usePinApp } from "./usePinApp";
+import { useDebouncedEffect } from "./useDebouncedEffect";
 import { MultimodalContent } from "../client/api";
+import Image from 'next/image';
+
 
 const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
@@ -516,6 +519,7 @@ export function ChatActions(props: {
   showContextPrompts: boolean;
   toggleContextPrompts: () => void;
   uploading: boolean;
+  attachImages: string[];
 }) {
   const config = useAppConfig();
   const navigate = useNavigate();
@@ -545,25 +549,38 @@ export function ChatActions(props: {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showUploadImage, setShowUploadImage] = useState(false);
 
+  // this fix memory leak as well, idk why front-end it's so fucking difficult to maintain cause of stupid complex
+  // for front-end developer you literally fucking retarded, write a complex code
   useEffect(() => {
     const show = isVisionModel(currentModel);
-    setShowUploadImage(show);
+    if (showUploadImage !== show) {
+      setShowUploadImage(show);
+    }
+
     if (!show) {
-      props.setAttachImages([]);
-      props.setUploading(false);
+      // Check if there's really a need to update these states to prevent unnecessary re-renders
+      if (props.uploading) {
+        props.setUploading(false);
+      }
+      if (props.attachImages.length !== 0) {
+        props.setAttachImages([]);
+      }
     }
 
     // if current model is not available
     // switch to first available model
-    const isUnavaliableModel = !models.some((m) => m.name === currentModel);
-    if (isUnavaliableModel && models.length > 0) {
+    const isUnavailableModel = !models.some((m) => m.name === currentModel);
+    if (isUnavailableModel && models.length > 0) {
       const nextModel = models[0].name as ModelType;
-      chatStore.updateCurrentSession(
-        (session) => (session.mask.modelConfig.model = nextModel),
-      );
-      showToast(nextModel);
+      // Only update if the next model is different from the current model
+      if (currentModel !== nextModel) {
+        chatStore.updateCurrentSession(
+          (session) => (session.mask.modelConfig.model = nextModel),
+        );
+        showToast(nextModel);
+      }
     }
-  }, [props, chatStore, currentModel, models]);
+  }, [props, chatStore, currentModel, models, showUploadImage]);
 
   return (
     <div className={styles["chat-input-actions"]}>
@@ -747,83 +764,36 @@ export function EditMessageModal(props: { onClose: () => void }) {
   );
 }
 
-function usePinApp(sessionId: string) { // Accept sessionId as a parameter
-  const [pinApp, setPinApp] = useState(false);
-  const isApp = getClientConfig()?.isApp;
-  const config = useAppConfig();
-  const TauriShortcut = config.desktopShortcut;
-  const chatStore = useChatStore();
-  const session = chatStore.currentSession();
-
-  const togglePinApp = useCallback(async () => {
-    if (!isApp) {
-      return;
-    }
-
-    if (pinApp) {
-      await appWindow.setAlwaysOnTop(false);
-      sendDesktopNotification(Locale.Chat.Actions.PinAppContent.UnPinned);
-      showToast(Locale.Chat.Actions.PinAppContent.UnPinned);
-    } else {
-      await appWindow.setAlwaysOnTop(true);
-      sendDesktopNotification(Locale.Chat.Actions.PinAppContent.Pinned);
-      showToast(Locale.Chat.Actions.PinAppContent.Pinned);
-    }
-    setPinApp((prevPinApp) => !prevPinApp);
-  }, [isApp, pinApp]);
-
-  useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.key === TauriShortcut) {
-        togglePinApp();
-      }
-    };
-    // Usage : Mouse+5,Mouse+4,Mouse+1(Middle Click)
-    // You need to copy-paste (e.g., Mouse+5 paste in settings) instead of typing manually in settings
-    const handleMouseClick = (event: MouseEvent) => {
-      if (event.button === 1 || event.button === 4 || event.button === 5) {
-        togglePinApp();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyPress);
-    document.addEventListener("mousedown", handleMouseClick);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyPress);
-      document.removeEventListener("mousedown", handleMouseClick);
-    };
-  }, [TauriShortcut, togglePinApp]);
-  // Reset pinApp when the session changes
-  useEffect(() => {
-    setPinApp(false);
-  }, [sessionId]); // Listen for changes to sessionId
-
-  return {
-    pinApp: isApp ? pinApp : false,
-    togglePinApp: isApp ? togglePinApp : () => { },
-  };
-}
-
-// Custom hook for debouncing a function
-function useDebouncedEffect(effect: () => void, deps: any[], delay: number) {
-  // Include `effect` in the dependency array for `useCallback`
-  const callback = useCallback(effect, [effect, ...deps]);
-
-  useEffect(() => {
-    const handler = debounce(callback, delay);
-
-    handler();
-
-    // Cleanup function to cancel the debounced call if the component unmounts
-    return () => handler.cancel();
-  }, [callback, delay]); // `callback` already includes `effect` in its dependencies, so no need to add it here again.
-}
-
 export function DeleteImageButton(props: { deleteImage: () => void }) {
   return (
-    <div className={styles["delete-image"]} onClick={props.deleteImage}>
+    <div
+      className={styles["delete-image"]}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        props.deleteImage();
+      }}
+    >
       <DeleteIcon />
+    </div>
+  );
+}
+
+export function ImageBox(props: {
+  showImageBox: boolean;
+  data: { src: string; alt: string };
+  closeImageBox: () => void;
+}) {
+  return (
+    <div
+      className={styles["image-box"]}
+      style={{ display: props.showImageBox ? "block" : "none" }}
+      onClick={props.closeImageBox}
+    >
+      <img src={props.data.src} alt={props.data.alt} />
+      <div className={styles["image-box-close-button"]}>
+        <CloseIcon />
+      </div>
     </div>
   );
 }
@@ -850,6 +820,8 @@ function _Chat() {
   const isApp = getClientConfig()?.isApp;
   const [attachImages, setAttachImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [showImageBox, setShowImageBox] = useState(false);
+  const [imageBoxData, setImageBoxData] = useState({ src: "", alt: "" });
 
   // prompt hints
   const promptStore = usePromptStore();
@@ -1256,14 +1228,19 @@ function _Chat() {
       setMsgRenderIndex(nextPageMsgIndex);
     }
 
-    setHitBottom(isHitBottom);
-    setAutoScroll(isHitBottom);
+    // Only update state if necessary to prevent infinite loop
+    // this fix memory leaks
+    if (hitBottom !== isHitBottom) {
+      setHitBottom(isHitBottom);
+      setAutoScroll(isHitBottom);
+    }
   }, [
     setHitBottom,
     setAutoScroll,
     isMobileScreen,
     msgRenderIndex,
     setMsgRenderIndex, // Added setMsgRenderIndex
+    hitBottom, // Include hitBottom in the dependency array
   ]);
 
   // Use the custom hook to debounce the onChatBodyScroll function
@@ -1435,48 +1412,58 @@ function _Chat() {
   }, [session.id]);
 
   async function uploadImage() {
-    const images: string[] = [];
-    images.push(...attachImages);
-
-    images.push(
-      ...(await new Promise<string[]>((res, rej) => {
-        const fileInput = document.createElement("input");
-        fileInput.type = "file";
-        fileInput.accept =
-          "image/png, image/jpeg, image/webp, image/heic, image/heif";
-        fileInput.multiple = true;
-        fileInput.onchange = (event: any) => {
-          setUploading(true);
-          const files = event.target.files;
-          const imagesData: string[] = [];
-          for (let i = 0; i < files.length; i++) {
-            const file = event.target.files[i];
-            compressImage(file, 256 * 1024)
-              .then((dataUrl) => {
-                imagesData.push(dataUrl);
-                if (
-                  imagesData.length === 3 ||
-                  imagesData.length === files.length
-                ) {
-                  setUploading(false);
-                  res(imagesData);
-                }
-              })
-              .catch((e) => {
+    const maxImages = 3;
+    if (uploading) return;
+    new Promise<string[]>((res, rej) => {
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept =
+        "image/png, image/jpeg, image/webp, image/heic, image/heif";
+      fileInput.multiple = true;
+      fileInput.onchange = (event: any) => {
+        setUploading(true);
+        const files = event.target.files;
+        const imagesData: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+          const file = event.target.files[i];
+          compressImage(file, 256 * 1024)
+            .then((dataUrl) => {
+              imagesData.push(dataUrl);
+              if (
+                imagesData.length + attachImages.length >= maxImages ||
+                imagesData.length === files.length
+              ) {
                 setUploading(false);
-                rej(e);
-              });
-          }
-        };
-        fileInput.click();
-      })),
-    );
+                res(imagesData);
+              }
+            })
+            .catch((e) => {
+              rej(e);
+            });
+        }
+      };
+      fileInput.click();
+    })
+      .then((imagesData) => {
+        const images: string[] = [];
+        images.push(...attachImages);
+        images.push(...imagesData);
+        setAttachImages(images);
+        const imagesLength = images.length;
+        if (imagesLength > maxImages) {
+          images.splice(maxImages, imagesLength - maxImages);
+        }
+        setAttachImages(images);
+      })
+      .catch(() => {
+        setUploading(false);
+      });
+  }
 
-    const imagesLength = images.length;
-    if (imagesLength > 3) {
-      images.splice(3, imagesLength - 3);
-    }
-    setAttachImages(images);
+  function openImageBox(src: string, alt?: string) {
+    alt = alt ?? "";
+    setImageBoxData({ src, alt });
+    setShowImageBox(true);
   }
 
   // this now better
@@ -1568,7 +1555,11 @@ function _Chat() {
           setShowModal={setShowPromptModal}
         />
       </div>
-
+      <ImageBox
+        showImageBox={showImageBox}
+        data={imageBoxData}
+        closeImageBox={() => setShowImageBox(false)}
+      ></ImageBox>
       <div
         className={styles["chat-body"]}
         ref={scrollRef}
@@ -1721,12 +1712,19 @@ function _Chat() {
                       fontSize={fontSize}
                       parentRef={scrollRef}
                       defaultShow={i >= messages.length - 6}
+                      openImageBox={openImageBox}
                     />
                     {getMessageImages(message).length == 1 && (
+                      // this fix when uploading
+                      // Note: ignore a fucking stupid "1750:23  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element"
+                      // In scenario how it work, this already handle in other side for example, when you use gemini-pro-vision
                       <img
                         className={styles["chat-message-item-image"]}
                         src={getMessageImages(message)[0]}
                         alt=""
+                        onClick={() =>
+                          openImageBox(getMessageImages(message)[0])
+                        }
                       />
                     )}
                     {getMessageImages(message).length > 1 && (
@@ -1740,13 +1738,15 @@ function _Chat() {
                       >
                         {getMessageImages(message).map((image, index) => {
                           return (
-                            <img
+                            <Image
                               className={
                                 styles["chat-message-item-image-multi"]
                               }
                               key={index}
                               src={image}
                               alt=""
+                              layout="responsive"
+                              onClick={() => openImageBox(image)}
                             />
                           );
                         })}
@@ -1791,6 +1791,7 @@ function _Chat() {
           }}
           showContextPrompts={false}
           toggleContextPrompts={() => showToast(Locale.WIP)}
+          attachImages={attachImages}
         />
         <label
           className={`${styles["chat-input-panel-inner"]} ${
@@ -1824,6 +1825,7 @@ function _Chat() {
                     key={index}
                     className={styles["attach-image"]}
                     style={{ backgroundImage: `url("${image}")` }}
+                    onClick={() => openImageBox(image)}
                   >
                     <div className={styles["attach-image-mask"]}>
                       <DeleteImageButton
